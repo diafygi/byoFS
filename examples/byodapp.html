@@ -222,11 +222,11 @@
    * Class to represent a DropBox profile.
    */
   byod.profiles.DropBoxProfile = function(token, decrypt_key) {
-    var profile_type = 'DropBox'; 
-    var token = token;
-    var decrypt_key = decrypt_key;
-    var get_url_prefix = 'https%3A//api-content.dropbox.com/1/files/dropbox/';
-    var post_url_prefix = 'https://api-content.dropbox.com/1/files/dropbox/';
+    this.profile_type = 'DropBox'; 
+    this.token = token;
+    this.decrypt_key = decrypt_key;
+    this.get_url_prefix = 'https://api-content.dropbox.com/1/files/dropbox/';
+    this.post_url_prefix = 'https://api-content.dropbox.com/1/files/dropbox/';
   };
 
   /**
