@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>Bring-Your-Own-Data storage</title>
+        <title>Bring Your Own Data - My Diary</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
@@ -226,11 +226,11 @@
             //BYOD LIBRARY JAVASCRIPT, GPLv2
             var BYOD = (function(){
                 templates = {
-                    auth: '<div class="byod-auth"><p>Load profile from:</p><ul><li><a href="#" class="byod-auth-db">Dropbox</a></li><li><a href="#" class="byod-auth-ls">localStorage</a></li></ul></div>',
+                    auth: '<div class="byod-auth"><p>Load from:</p><ul><li><a href="#" class="byod-auth-db">Dropbox</a></li><li><a href="#" class="byod-auth-ls">localStorage</a></li></ul></div>',
                     db: '<div class="byod-db"><p>Dropbox Code: <input class="byod-db-code"></p><p>Decrypt Password: <input class="byod-db-pass"></p><p><a href="#" class="byod-db-submit">Decrypt</a> <a href="#" class="byod-reset">Go Back</a></p></div>',
                     dbcon: '<div class="byod-db-connecting"><p>Verifying...</p></div>',
                     ls: '<div class="byod-ls"><p>Decrypt Password: <input class="byod-ls-pass"></p><p><a href="#" class="byod-ls-submit">Decrypt</a> <a href="#" class="byod-reset">Go Back</a></p></div>',
-                    connected: '<div class="byod-connected"><p>Connected! (<a href="#">disconnect</a>)</p></div>',
+                    connected: '<div class="byod-connected"><p>Connected!</p></div>',
                 }
                 return {
                     //insert the BYOD connection button and behavior
@@ -275,6 +275,7 @@
                                         var pass = $(e.target).parents(".byod-db").find(".byod-db-pass").val();
                                         var profile = {
                                             get: function(name, callback){
+                                                name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
                                                 $.ajax({
                                                     type: "GET",
                                                     url: "https://api-content.dropbox.com/1/files/sandbox/" + name + ".txt",
@@ -298,6 +299,7 @@
                                                 });
                                             },
                                             post: function(name, data, callback){
+                                                name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
                                                 //null data means delete
                                                 if(data === null){
                                                     $.ajax({
@@ -350,10 +352,6 @@
                                         };
                                         //mark widget as connected before callback
                                         $(target).html(templates['connected']);
-                                        $(target).find(".byod-connected a").one("click", function(e){
-                                            e.preventDefault();
-                                            BYOD.setWidget(target, callback);
-                                        });
                                         callback(profile);
                                     },
                                     error: function(xhr) {
@@ -389,29 +387,30 @@
                                 var pass = $(e.target).parents(".byod-ls").find(".byod-ls-pass").val();
                                 var profile = {
                                     get: function(name, callback){
-                                        data = sjcl.decrypt(pass, localStorage['byod-' + name]);
+                                        name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash("byod-"+name));
+                                        if(localStorage[name])
+                                            data = sjcl.decrypt(pass, localStorage[name]);
+                                        else
+                                            data = null;
                                         callback(data);
                                     },
                                     post: function(name, data, callback){
+                                        name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash("byod-"+name));
                                         //null data means delete
                                         if(data === null){
-                                            localStorage.removeItem("byod-" + name);
+                                            if(localStorage[name] !== undefined)
+                                                localStorage.removeItem(name);
                                             callback(true);
                                         }
                                         //not-null data means new file or update existing file
                                         else{
-                                            localStorage.setItem("byod-" + name, sjcl.encrypt(pass, data));
+                                            localStorage.setItem(name, sjcl.encrypt(pass, data));
                                             callback(true);
                                         }
                                     },
                                 };
                                 //mark widget as connected before callback
                                 $(target).html(templates['connected']);
-                                $("#byod-tmpl-connected").clone().appendTo(target);
-                                $(target).find(".byod-connected a").one("click", function(e){
-                                    e.preventDefault();
-                                    BYOD.setWidget(target, callback);
-                                });
                                 callback(profile);
                             });
                         });
@@ -419,17 +418,205 @@
                 };
             })();
         </script>
+        <style>
+            /*App CSS goes here*/
+
+        </style>
     </head>
     <body>
         <!--HTML Goes Here-->
-        <div id="widget"></div>
-        <p>Hello World</p>
-
-
-
+        <div id="header">
+            <div id="widget"></div>
+            <h1>Bring Your Own Data - My Diary</h1>
+        </div>
+        <div id="content">
+            <p id="message"></p>
+            <a href="#" id="add-toggle" style="display:none;">Add an entry</a>
+            <div id="add-form" style="display:none;">
+                <p><span id="add-title"></span> (<a href="#" id="add-back">close</a>)</p>
+                <input type="hidden" id="add-id" val=""/>
+                <textarea id="add-text"></textarea>
+                <a href="#" id="add-submit">Submit</a>
+                <p id="add-submitting">Submitting...</p>
+            </div>
+            <div id="list"></div>
+        </div>
 
         <!--App code goes here-->
         <script>
+            var template = {
+                entry: '<div class="entry-id"><p><span class="entry-title"></span> <a href="#" class="entry-toggle">[+]</a></p><div class="entry-area" style="display:none;"><p class="entry-text"></p><a href="#" class="entry-edit">Edit</a> <a href="#" class="entry-del">Delete</a></div></div>'
+            }
+            var message = {
+                init: "To get started, load your diary from Dropbox or localStorage!",
+                reg1: "Creating diary...",
+                reg2: "Creating diary...Done!",
+                empty: "You don't have any entries in your diary. How about adding one?",
+                add: "Entry added!",
+                update: "Entry updated!",
+                del: "Entry deleted!",
+                load: "Loading...",
+            };
+            var pre = "mydiary-";
+            var ids = [];
+            var db;
+
+            function ts_to_str(timestamp){
+                var t = new Date(timestamp);
+                var str =  t.getFullYear()+"-"+('0'+(t.getMonth()+1)).slice(-2)+"-"+('0'+t.getDate()).slice(-2);
+                str += " "+('0'+t.getHours()).slice(-2)+":"+('0'+t.getMinutes()).slice(-2)+":"+('0'+t.getSeconds()).slice(-2);
+                return str;
+            }
+
+            function show_addform(id, text){
+                $("#add-title").val(id ? "Editing entry from " + ts_to_str(id) : "New Entry");
+                $("#add-id").val(id ? id : "");
+                $("#add-text").val(text ? text : "");
+                $("#add-toggle").hide();
+                $("#add-submit").show();
+                $("#add-submitting").hide();
+                $("#add-form").show();
+                $("#add-back").off("click");
+                $("#add-back").one("click", function(e){
+                    e.preventDefault();
+                    hide_addform();
+                });
+                //submit or update entry
+                $("#add-submit").off("click");
+                $("#add-submit").one("click", function(e){
+                    e.preventDefault();
+                    $("#add-submit").hide();
+                    $("#add-submitting").show();
+                    //update entry
+                    if($("#add-id").val()){
+                        db.post(pre+"entry"+id, $("#add-text"), function(){
+                            setup_app('update');
+                        });
+                    }
+                    //new entry
+                    else{
+                        //id format: YYYY-MM-DD_HH:MM:SS
+                        var new_id = new Date().getTime();
+                        db.post(pre+"entry"+new_id, $("#add-text").val(), function(){
+                            ids.unshift(new_id);
+                            db.post(pre+"index", JSON.stringify(ids), function(){
+                                setup_app('add');
+                            });
+                        });
+                    }
+                });
+            }
+
+            function hide_addform(){
+                $("#add-form").hide();
+                $("#add-toggle").show();
+                $("#add-toggle").off("click");
+                $("#add-toggle").one("click", function(e){
+                    e.preventDefault();
+                    show_addform();
+                });
+            }
+
+            function load_entries(){
+                hide_addform();
+                //blank state for no entries
+                if(!ids.length){
+                    $("#message").html(message['empty']);
+                    $("#list").html("");
+                }
+                //show list of entries and display the top one
+                else{
+                    $("#list").html("");
+                    for(var i = 0; i < ids.length; i++){
+                        $("#list").append(template['entry']);
+                        $("#list").children().last().attr("id", ids[i]);
+                        $("#"+ids[i]).find(".entry-title").text(ts_to_str(ids[i]));
+                    }
+                    //event binders for entry expand/collapse/edit/delete
+                    $(".entry-toggle").off("click");
+                    $(".entry-toggle").on("click", function(e){
+                        var id = $(e.target).parents(".entry-id").attr("id");
+                        if($("#"+id).find(".entry-toggle").text() == "[+]"){
+                            if($("#"+id).find(".entry-text").text() == ""){
+                                $("#"+id).find(".entry-text").text("Loading...");
+                                db.get(pre+"entry"+id, function(data){
+                                    $("#"+id).find(".entry-text").text(data);
+                                });
+                            }
+                            $("#"+id).find(".entry-area").show();
+                            $("#"+id).find(".entry-toggle").text("[-]");
+                        }
+                        else{
+                            $("#"+id).find(".entry-area").hide();
+                            $("#"+id).find(".entry-toggle").text("[+]");
+                        }
+                    });
+                    $(".entry-edit").off("click");
+                    $(".entry-edit").on("click", function(e){
+                        var id = $(e.target).parents(".entry-id").attr("id");
+                        show_addform(id, $("#"+id).find(".entry-text").text());
+                        window.scrollTo(0, $("#add-form").offset().top - 10);
+                    });
+                    $(".entry-del").off("click");
+                    $(".entry-del").on("click", function(e){
+                        var id = $(e.target).parents(".entry-id").attr("id");
+                        if(confirm("Are you sure you want to delete this entry?")){
+                            ids.splice(ids.indexOf(id), 1);
+                            db.post(pre+"index", JSON.stringify(ids), function(){
+                                db.post(pre+"entry"+id, null, function(){
+                                    setup_app('del');
+                                });
+                            });
+                        }
+                    });
+                }
+            }
+
+            function setup_app(msg_key){
+                $("#message").html(message['load']);
+                //see if the index exists
+                try{
+                    db.get(pre+"index", function(data){
+                        //no index, assume registration and create index file
+                        if(data == null){
+                            $("#message").html(message['reg1']);
+                            db.post(pre+"index", JSON.stringify([]), function(){
+                                $("#message").html(message['reg2']);
+                                setup_app();
+                            });
+                            return;
+                        }
+                        //index found
+                        else{
+                            if(msg_key)
+                                $("#message").html(message[msg_key])
+                            else
+                                $("#message").html("");
+                            ids = $.parseJSON(data);
+                            load_entries();
+                        }
+                    });
+                    return;
+                }
+                catch(error){
+                    console.log(error);
+                    alert("Couldn't decrypt from that password :(");
+                    app_init();
+                }
+            }
+
+            //initialize app
+            function app_init(){
+                $("#message").html(message['init'])
+                BYOD.setWidget("#widget", function(connected_db){
+                    db = connected_db;
+                    setup_app();
+                });
+            }
+            app_init();
+        </script>
+        <script>
+            /*
             //debug test
             BYOD.setWidget("#widget", function(db){
                 console.log("connected!");
@@ -449,6 +636,7 @@
                     });
                 });
             });
+            */
         </script>
     </body>
 </html>
