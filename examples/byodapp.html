@@ -11,30 +11,6 @@
             /* HTML5 display-role reset for older browsers */
             article, aside, details, figcaption, figure, footer, header, hgroup, menu, nav, section {display:block;} body {line-height: 1;} ol, ul {list-style: none;}
             blockquote, q {quotes: none;} blockquote:before, blockquote:after, q:before, q:after {content:''; content:none;} table {border-collapse:collapse; border-spacing:0;}
-
-
-
-
-            /*Widget CSS goes here*/
-
-
-
-
-
-
-
-
-
-
-            /*App CSS goes here*/
-
-
-
-
-
-
-
-
         </style>
         <script>
             //Stanford Javascript Crypto Library from https://github.com/bitwiseshiftleft/sjcl/blob/master/sjcl.js, as of commit 797bfcfa377429433d2251dde4b16db3cdc1c0cc
@@ -241,53 +217,30 @@
             },d>0&&this.bind(w,v),this.size()&&this.get(0).clientLeft,this.css(h),d<=0&&setTimeout(function(){u.each(function(){v.call(this);
             });},0),this;},i=null;}(Zepto);
         </script>
-    </head>
-    <body>
-        <!--HTML Goes Here-->
-        <div id="widget"></div>
-        <p>Hello World</p>
 
+        <style>
+            /*BYOD LIBRARY CSS, GPLv2*/
 
-
-
-        <!--BYOD code goes here-->
-        <div style="display:none;">
-            <div id="byod-tmpl-auth">
-                <div class="byod-auth">
-                    <p>Load profile from:</p>
-                    <ul>
-                        <li><a href="#" class="byod-auth-db">Dropbox</a></li>
-                        <li><a href="#" class="byod-auth-ls">localStorage</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div id="byod-tmpl-db">
-                <div class="byod-db">
-                    <p>Dropbox Code: <input class="byod-db-code"/></p>
-                    <p>Decrypt Password: <input class="byod-db-pass"/></p>
-                    <p><a href="#" class="byod-db-submit">Decrypt</a></p>
-                </div>
-            </div>
-            <div id="byod-tmpl-ls">
-                <div class="byod-ls">
-                    <p>Decrypt Password: <input class="byod-ls-pass"/></p>
-                    <p><a href="#" class="byod-ls-submit">Decrypt</a></p>
-                </div>
-            </div>
-            <div id="byod-tmpl-connected">
-                <div class="byod-connected">
-                    <p>Connected! (<a href="#">Reset</a>)</p>
-                </div>
-            </div>
-        </div>
+        </style>
         <script>
+            //BYOD LIBRARY JAVASCRIPT, GPLv2
             var BYOD = (function(){
+                templates = {
+                    auth: '<div class="byod-auth"><p>Load profile from:</p><ul><li><a href="#" class="byod-auth-db">Dropbox</a></li><li><a href="#" class="byod-auth-ls">localStorage</a></li></ul></div>',
+                    db: '<div class="byod-db"><p>Dropbox Code: <input class="byod-db-code"></p><p>Decrypt Password: <input class="byod-db-pass"></p><p><a href="#" class="byod-db-submit">Decrypt</a> <a href="#" class="byod-reset">Go Back</a></p></div>',
+                    dbcon: '<div class="byod-db-connecting"><p>Verifying...</p></div>',
+                    ls: '<div class="byod-ls"><p>Decrypt Password: <input class="byod-ls-pass"></p><p><a href="#" class="byod-ls-submit">Decrypt</a> <a href="#" class="byod-reset">Go Back</a></p></div>',
+                    connected: '<div class="byod-connected"><p>Connected! (<a href="#">disconnect</a>)</p></div>',
+                }
                 return {
                     //insert the BYOD connection button and behavior
                     setWidget: function(target, callback){
                         //insert button html into target
-                        $(target).html("");
-                        $("#byod-tmpl-auth").clone().appendTo(target);
+                        $(target).html(templates['auth']);
+
+                        /////////////
+                        // DROPBOX //
+                        /////////////
 
                         //add dropbox click binder to connection button
                         $(target).find(".byod-auth-db").one("click", function(e){
@@ -296,10 +249,14 @@
                             window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=9xzbrduyt7rznbw", "_blank");
 
                             //insert dropbox token/decrypt form and behavior
-                            $(target).html("");
-                            $("#byod-tmpl-db").clone().appendTo(target);
+                            $(target).html(templates['db']);
+                            $(target).find(".byod-reset").one("click", function(e){
+                                e.preventDefault();
+                                BYOD.setWidget(target, callback);
+                            });
                             $(target).find(".byod-db-submit").one("click", function(e){
                                 e.preventDefault();
+                                $(target).html(templates['dbcon']);
 
                                 //take submitted code and get a oauth token
                                 $.ajax({
@@ -327,8 +284,13 @@
                                                         callback(data);
                                                     },
                                                     error: function(xhr) {
-                                                        console.log("errorget");
-                                                        console.log(xhr);
+                                                        if(xhr.status == 404){
+                                                            callback(null);
+                                                        }
+                                                        else{
+                                                            console.log("errorget");
+                                                            console.log(xhr);
+                                                        }
                                                     },
                                                     beforeSend: function(xhr) {
                                                        xhr.setRequestHeader("Authorization", "Bearer " + token);
@@ -350,8 +312,13 @@
                                                             callback(true);
                                                         },
                                                         error: function(xhr) {
-                                                            console.log("errordel");
-                                                            console.log(xhr);
+                                                            if(xhr.status == 404){
+                                                                callback(null);
+                                                            }
+                                                            else{
+                                                                console.log("errordel");
+                                                                console.log(xhr);
+                                                            }
                                                         },
                                                         beforeSend: function(xhr) {
                                                            xhr.setRequestHeader("Authorization", "Bearer " + token);
@@ -382,27 +349,40 @@
                                             },
                                         };
                                         //mark widget as connected before callback
-                                        $(target).html("");
-                                        $("#byod-tmpl-connected").clone().appendTo(target);
+                                        $(target).html(templates['connected']);
                                         $(target).find(".byod-connected a").one("click", function(e){
+                                            e.preventDefault();
                                             BYOD.setWidget(target, callback);
                                         });
                                         callback(profile);
                                     },
                                     error: function(xhr) {
-                                        console.log("errortoken");
-                                        console.log(xhr);
+                                        if(xhr.status == 400){
+                                            alert("Something went wrong :( Did you copy your code correctly?");
+                                            BYOD.setWidget(target, callback);
+                                        }
+                                        else{
+                                            console.log("errortoken");
+                                            console.log(xhr);
+                                        }
                                     },
                                 });
                             });
                         });
 
+                        //////////////////
+                        // LOCALSTORAGE //
+                        //////////////////
+
                         //add localStorage click binder to connection button
                         $(target).find(".byod-auth-ls").one("click", function(e){
                             e.preventDefault();
                             //insert dropbox token/decrypt form and behavior
-                            $(target).html("");
-                            $("#byod-tmpl-ls").clone().appendTo(target);
+                            $(target).html(templates['ls']);
+                            $(target).find(".byod-reset").one("click", function(e){
+                                e.preventDefault();
+                                BYOD.setWidget(target, callback);
+                            });
                             $(target).find(".byod-ls-submit").one("click", function(e){
                                 e.preventDefault();
                                 //set profile get/post functions
@@ -426,9 +406,10 @@
                                     },
                                 };
                                 //mark widget as connected before callback
-                                $(target).html("");
+                                $(target).html(templates['connected']);
                                 $("#byod-tmpl-connected").clone().appendTo(target);
                                 $(target).find(".byod-connected a").one("click", function(e){
+                                    e.preventDefault();
                                     BYOD.setWidget(target, callback);
                                 });
                                 callback(profile);
@@ -438,12 +419,11 @@
                 };
             })();
         </script>
-
-
-
-
-
-
+    </head>
+    <body>
+        <!--HTML Goes Here-->
+        <div id="widget"></div>
+        <p>Hello World</p>
 
 
 
@@ -459,6 +439,12 @@
                         console.log(data);
                         db.post("testfile", null, function(){
                             console.log("deleted!");
+                            db.get("testfile", function(data){
+                                console.log(data);
+                                db.post("testfile", null, function(){
+                                    console.log("deleted2!");
+                                });
+                            });
                         });
                     });
                 });
