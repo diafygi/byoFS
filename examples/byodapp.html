@@ -211,27 +211,76 @@
 
 
 
+<script>
+  // constants
+  byod = {};
+  byod.profiles = {};
 
+  // Profile code goes here
 
+  /**
+   * Class to represent a DropBox profile.
+   */
+  byod.profiles.DropBoxProfile = function(token, decrypt_key) {
+    var profile_type = 'DropBox'; 
+    var token = token;
+    var decrypt_key = decrypt_key;
+    var get_url_prefix = 'https%3A//api-content.dropbox.com/1/files/dropbox/';
+    var post_url_prefix = 'https://api-content.dropbox.com/1/files/dropbox/';
+  };
 
+  /**
+   * Method to get the profile type of the current profile.
+   */
+  byod.profiles.DropBoxProfile.prototype.GetProfileType = function() {
+    return this.profile_type;
+  };
 
+  /**
+   * A 'get' method for the DropBox profile.
+   * 
+   * File data should be accessible from the 'this' context in the callback
+   * under the 'value' attribute.
+   */
+  byod.profiles.DropBoxProfile.prototype.get = function(file_handle, callback) {
+    $.ajax({
+        type: 'GET',
+        url: this.get_url_prefix + file_handle,
+        // url: 'blob:' + this.get_url_prefix + file_handle,
+        dataType: 'blob',
+        success: callback,
+        error: function(xhr, type) {
+            alert('failed to run GET xhr');
+        },
+        beforeSend: function(xhr, settings) {
+           xhr.setRequestHeader('Authorization', 'Bearer ' + this.token);
+        }
+    });
+  };
 
+  /**
+   * A 'post' method for the DropBox profile to upload a file from a blob.
+   */
+  byod.profiles.DropBoxProfile.prototype.post = function(file_handle, blob_data, callback) {
+    $.ajax({
+        type: 'POST',
+        url: this.get_url_prefix + file_handle,
+        data: blob_data,
+        contentType: 'application/octet-binary',
+        success: callback,
+        error: function(xhr, type) {
+            alert('failed to run POST xhr');
+        }
+    });
+  };
 
+  function main() {
+    p = byod.profiles.DropBoxProfile('test token', 'key key key');
 
-
-
-        <!--Profile code goes here-->
-        <script>
-            
-        </script>
-
-
-
-
-
-
-
-
+    // need callbacks here for blob testing to pass into .get or .post
+  };
+           
+ </script>
 
 
         <!--Widget code goes here-->
