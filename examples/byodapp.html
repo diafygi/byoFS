@@ -2,21 +2,15 @@
 <html>
     <head>
         <title>Bring-Your-Own-Data storage</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
-            html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-            a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
-            strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form,
-            label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas,
-            details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section,
-            summary, time, mark, audio, video {margin:0; padding:0; border:0; font-size:100%; font:inherit; vertical-align:baseline;}
+            html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
+            strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas,
+            details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {margin:0; padding:0; border:0; font-size:100%; font:inherit; vertical-align:baseline;}
             /* HTML5 display-role reset for older browsers */
-            article, aside, details, figcaption, figure, footer, header, hgroup, menu, nav, section {display:block;}
-            body {line-height: 1;}
-            ol, ul {list-style: none;}
-            blockquote, q {quotes: none;}
-            blockquote:before, blockquote:after, q:before, q:after {content:''; content:none;}
-            table {border-collapse:collapse; border-spacing:0;}
+            article, aside, details, figcaption, figure, footer, header, hgroup, menu, nav, section {display:block;} body {line-height: 1;} ol, ul {list-style: none;}
+            blockquote, q {quotes: none;} blockquote:before, blockquote:after, q:before, q:after {content:''; content:none;} table {border-collapse:collapse; border-spacing:0;}
 
 
 
@@ -255,79 +249,9 @@
 
 
 
-<script>
-  // constants
-  byod = {};
-  byod.profiles = {};
-
-  // Profile code goes here
-
-  /**
-   * Class to represent a DropBox profile.
-   */
-  byod.profiles.DropBoxProfile = function(token, decrypt_key) {
-    var profile_type = 'DropBox'; 
-    var token = token;
-    var decrypt_key = decrypt_key;
-    var get_url_prefix = 'https%3A//api-content.dropbox.com/1/files/dropbox/';
-    var post_url_prefix = 'https://api-content.dropbox.com/1/files/dropbox/';
-  };
-
-  /**
-   * Method to get the profile type of the current profile.
-   */
-  byod.profiles.DropBoxProfile.prototype.GetProfileType = function() {
-    return this.profile_type;
-  };
-
-  /**
-   * A 'get' method for the DropBox profile.
-   * 
-   * File data should be accessible from the 'this' context in the callback
-   * under the 'value' attribute.
-   */
-  byod.profiles.DropBoxProfile.prototype.get = function(file_handle, callback) {
-    $.ajax({
-        type: 'GET',
-        url: this.get_url_prefix + file_handle,
-        // url: 'blob:' + this.get_url_prefix + file_handle,
-        dataType: 'blob',
-        success: callback,
-        error: function(xhr, type) {
-            alert('failed to run GET xhr');
-        },
-        beforeSend: function(xhr, settings) {
-           xhr.setRequestHeader('Authorization', 'Bearer ' + this.token);
-        }
-    });
-  };
-
-  /**
-   * A 'post' method for the DropBox profile to upload a file from a blob.
-   */
-  byod.profiles.DropBoxProfile.prototype.post = function(file_handle, blob_data, callback) {
-    $.ajax({
-        type: 'POST',
-        url: this.get_url_prefix + file_handle,
-        data: blob_data,
-        contentType: 'application/octet-binary',
-        success: callback,
-        error: function(xhr, type) {
-            alert('failed to run POST xhr');
-        }
-    });
-  };
-
-  function main() {
-    p = byod.profiles.DropBoxProfile('test token', 'key key key');
-
-    // need callbacks here for blob testing to pass into .get or .post
-  };
-           
- </script>
 
 
-        <!--Widget code goes here-->
+        <!--BYOD code goes here-->
         <div style="display:none;">
             <div id="byod-tmpl-auth">
                 <div class="byod-auth">
@@ -345,45 +269,175 @@
                     <p><a href="#" class="byod-db-submit">Decrypt</a></p>
                 </div>
             </div>
+            <div id="byod-tmpl-ls">
+                <div class="byod-ls">
+                    <p>Decrypt Password: <input class="byod-ls-pass"/></p>
+                    <p><a href="#" class="byod-ls-submit">Decrypt</a></p>
+                </div>
+            </div>
+            <div id="byod-tmpl-connected">
+                <div class="byod-connected">
+                    <p>Connected! (<a href="#">Reset</a>)</p>
+                </div>
+            </div>
         </div>
         <script>
-            //insert the BYOD connection button and behavior
-            function insert_widget(target, callback){
-                //insert button html into target
-                $("#byod-tmpl-auth").clone().appendTo(target);
+            var BYOD = (function(){
+                return {
+                    //insert the BYOD connection button and behavior
+                    setWidget: function(target, callback){
+                        //insert button html into target
+                        $(target).html("");
+                        $("#byod-tmpl-auth").clone().appendTo(target);
 
-                //add dropbox click binder to connection button
-                $(target).find(".byod-auth-db").one("click", function(e){
-                    e.preventDefault();
-                    //open dropbox oauth window
-                    window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=9xzbrduyt7rznbw", "_blank");
+                        //add dropbox click binder to connection button
+                        $(target).find(".byod-auth-db").one("click", function(e){
+                            e.preventDefault();
+                            //open dropbox oauth window
+                            window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=9xzbrduyt7rznbw", "_blank");
 
-                    //insert dropbox token/decrypt form and behavior
-                    $(target).html("");
-                    $("#byod-tmpl-db").clone().appendTo(target);
-                    $(target).find(".byod-db-submit").one("click", function(e){
-                        e.preventDefault();
+                            //insert dropbox token/decrypt form and behavior
+                            $(target).html("");
+                            $("#byod-tmpl-db").clone().appendTo(target);
+                            $(target).find(".byod-db-submit").one("click", function(e){
+                                e.preventDefault();
 
-                        //take submitted code and get a oauth token
-                        $.post("https://api.dropbox.com/1/oauth2/token", {
-                            "code": $(e.target).parents(".byod-db").find(".byod-db-code").val(),
-                            "grant_type": "authorization_code",
-                            "client_id": "9xzbrduyt7rznbw",
-                            "client_secret": "g7jnj93mqluqazh",
-                        },
-                        function(data){
-                            console.log($.parseJSON(data));
+                                //take submitted code and get a oauth token
+                                $.ajax({
+                                    type: "POST",
+                                    url: "https://api.dropbox.com/1/oauth2/token",
+                                    data: {
+                                        "code": $(e.target).parents(".byod-db").find(".byod-db-code").val(),
+                                        "grant_type": "authorization_code",
+                                        "client_id": "9xzbrduyt7rznbw", //"byod" drobox app
+                                        "client_secret": "g7jnj93mqluqazh",
+                                    },
+                                    dataType: "json",
+                                    success: function(data){
+                                        //set profile get/post functions
+                                        var token = data['access_token'];
+                                        var pass = $(e.target).parents(".byod-db").find(".byod-db-pass").val();
+                                        var profile = {
+                                            get: function(name, callback){
+                                                $.ajax({
+                                                    type: "GET",
+                                                    url: "https://api-content.dropbox.com/1/files/sandbox/" + name + ".txt",
+                                                    dataType: "text",
+                                                    success: function(data){
+                                                        data = sjcl.decrypt(pass, $.parseJSON(data));
+                                                        callback(data);
+                                                    },
+                                                    error: function(xhr) {
+                                                        console.log("errorget");
+                                                        console.log(xhr);
+                                                    },
+                                                    beforeSend: function(xhr) {
+                                                       xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                    },
+                                                });
+                                            },
+                                            post: function(name, data, callback){
+                                                //null data means delete
+                                                if(data === null){
+                                                    $.ajax({
+                                                        type: "POST",
+                                                        url: "https://api.dropbox.com/1/fileops/delete",
+                                                        data: {
+                                                            root: "sandbox",
+                                                            path: name + ".txt",
+                                                        },
+                                                        dataType: "json",
+                                                        success: function(data){
+                                                            callback(true);
+                                                        },
+                                                        error: function(xhr) {
+                                                            console.log("errordel");
+                                                            console.log(xhr);
+                                                        },
+                                                        beforeSend: function(xhr) {
+                                                           xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                        },
+                                                    });
+                                                }
+                                                //not-null data means new file or update existing file
+                                                else{
+                                                    data = JSON.stringify(sjcl.encrypt(pass, data));
+                                                    $.ajax({
+                                                        type: "POST",
+                                                        url: "https://api-content.dropbox.com/1/files_put/sandbox/" + name + ".txt",
+                                                        data: data,
+                                                        contentType: "text/plain",
+                                                        dataType: "json",
+                                                        success: function(data){
+                                                            callback(true);
+                                                        },
+                                                        error: function(xhr) {
+                                                            console.log("errorpost");
+                                                            console.log(xhr);
+                                                        },
+                                                        beforeSend: function(xhr) {
+                                                           xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                        },
+                                                    });
+                                                }
+                                            },
+                                        };
+                                        //mark widget as connected before callback
+                                        $(target).html("");
+                                        $("#byod-tmpl-connected").clone().appendTo(target);
+                                        $(target).find(".byod-connected a").one("click", function(e){
+                                            BYOD.setWidget(target, callback);
+                                        });
+                                        callback(profile);
+                                    },
+                                    error: function(xhr) {
+                                        console.log("errortoken");
+                                        console.log(xhr);
+                                    },
+                                });
+                            });
                         });
-                    });
-                });
 
-                //add localStorage click binder to connection button
-                $(target).find(".byod-auth-ls").one("click", function(e){
-                    e.preventDefault();
-                    //insert localstorage decrypt form and behavior
-                    //##############
-                });
-            }
+                        //add localStorage click binder to connection button
+                        $(target).find(".byod-auth-ls").one("click", function(e){
+                            e.preventDefault();
+                            //insert dropbox token/decrypt form and behavior
+                            $(target).html("");
+                            $("#byod-tmpl-ls").clone().appendTo(target);
+                            $(target).find(".byod-ls-submit").one("click", function(e){
+                                e.preventDefault();
+                                //set profile get/post functions
+                                var pass = $(e.target).parents(".byod-ls").find(".byod-ls-pass").val();
+                                var profile = {
+                                    get: function(name, callback){
+                                        data = sjcl.decrypt(pass, localStorage['byod-' + name]);
+                                        callback(data);
+                                    },
+                                    post: function(name, data, callback){
+                                        //null data means delete
+                                        if(data === null){
+                                            localStorage.removeItem("byod-" + name);
+                                            callback(true);
+                                        }
+                                        //not-null data means new file or update existing file
+                                        else{
+                                            localStorage.setItem("byod-" + name, sjcl.encrypt(pass, data));
+                                            callback(true);
+                                        }
+                                    },
+                                };
+                                //mark widget as connected before callback
+                                $(target).html("");
+                                $("#byod-tmpl-connected").clone().appendTo(target);
+                                $(target).find(".byod-connected a").one("click", function(e){
+                                    BYOD.setWidget(target, callback);
+                                });
+                                callback(profile);
+                            });
+                        });
+                    },
+                };
+            })();
         </script>
 
 
@@ -398,8 +452,17 @@
         <!--App code goes here-->
         <script>
             //debug test
-            insert_widget("#widget", function(tmp_profile){
-                alert(tmp_profile);
+            BYOD.setWidget("#widget", function(db){
+                console.log("connected!");
+                db.post("testfile", "testdata", function(){
+                    console.log("post callback!");
+                    db.get("testfile", function(data){
+                        console.log(data);
+                        db.post("testfile", null, function(){
+                            console.log("deleted!");
+                        });
+                    });
+                });
             });
         </script>
     </body>
