@@ -13,14 +13,12 @@ module.service( 'Photo', [ '$rootScope', function( $rootScope ) {
       db.get('photos', function(data) {
         service.photos = data && data.length > 0 ? JSON.parse(data) : [];
         console.log(['Retrieved Data', data, service.photos]);
-        $rootScope.$broadcast('photos.update');
         $rootScope.$broadcast('connected');
+        $rootScope.$broadcast('photos.update');
       });
     },
 
-    addPhoto: function (photo) {
-      var photos = service.photos.concat(photo);
-
+    update: function(photos) {
       service.db.post('photos', JSON.stringify(photos), function(worked) {
         if (worked) {
           service.photos = photos;
@@ -30,13 +28,20 @@ module.service( 'Photo', [ '$rootScope', function( $rootScope ) {
       });
     },
 
+    addPhoto: function (photo) {
+      service.update(service.photos.concat(photo));
+    },
+
     clearPhotos: function() {
-      service.db.post('photos', "[]", function(worked) {
-        if (worked) {
-          service.photos = [];
-          $rootScope.$broadcast('photos.update');
-        }
+      service.update([]);
+    },
+
+    removePhoto: function(photo) {
+      var photos = service.photos.filter(function(_photo) {
+        return _photo != photo;
       });
+
+      service.update(photos);
     }
   }
 
@@ -44,21 +49,36 @@ module.service( 'Photo', [ '$rootScope', function( $rootScope ) {
 }]);
 
 var ctrl = [ '$scope', 'Photo', function( $scope, Photo ) {
+  $scope.safeApply = function(fn) {
+    var phase = this.$root.$$phase;
+    if (phase == '$apply' || phase == '$digest') {
+      if (fn && (typeof(fn) === 'function')) {
+        fn();
+      }
+    } else {
+      this.$apply(fn);
+    }
+  };
+
   $scope.$on( 'connected', function() {
-    $scope.$apply(function() {
+    $scope.safeApply(function() {
       $scope.connected = true;
     });
   });
 
   $scope.$on( 'photos.update', function(event) {
-    $scope.$apply(function () {
+    $scope.safeApply(function() {
       $scope.photos = Photo.photos;
-    });
+    })
   });
 
   $scope.clearPhotos = function() {
-    Photo.clearPhotos();
-    $scope.photos = Photo.photos;
+    if (confirm('Are you sure?')) {
+      $scope.safeApply(function() {
+        Photo.clearPhotos();
+        $scope.photos = Photo.photos;
+      });
+    }
   }
 
   $scope.photos = Photo.photos;
@@ -86,7 +106,9 @@ module.directive( "addPhotoButton", [ 'Photo', function( Photo ) {
           // Closure to capture the file information.
           reader.onload = (function(theFile) {
             return function(e) {
-              Photo.addPhoto( { title: theFile.name, data: e.target.result } );
+              scope.$apply(function() {
+                Photo.addPhoto( { title: theFile.name, data: e.target.result } );
+              });
             };
           })(f);
 
@@ -100,6 +122,31 @@ module.directive( "addPhotoButton", [ 'Photo', function( Photo ) {
   }
 }]);
 
+module.directive("removePhoto", [ 'Photo', function(Photo) {
+  return {
+    restrict: "A",
+    link: function(scope, element, attrs) {
+      element.bind("click", function() {
+        console.log(['Remove Photo', scope, element, attrs]);
+        scope.$apply(function() {
+          Photo.removePhoto(scope.photo);
+        });
+      });
+    }
+  }
+}]);
+
+module.directive("fileUpload", [ function() {
+  return {
+    restrict: "A",
+    link: function(scope, element, attrs) {
+      element.bind("click", function() {
+        document.getElementById(attrs.target).click();
+      });
+    }
+  }
+}]);
+
 module.directive("byodWidget", [ 'Photo', function(Photo) {
   return {
     restrict: "A",
@@ -107,7 +154,9 @@ module.directive("byodWidget", [ 'Photo', function(Photo) {
       setTimeout(function() { // Dom readyness
         // Initialize BYOD
         BYOD.setWidget("#" + attrs.id, function(db) {
-          Photo.setDatabase(db);
+          scope.$apply(function() {
+            Photo.setDatabase(db);
+          });
         });
       });
     }
