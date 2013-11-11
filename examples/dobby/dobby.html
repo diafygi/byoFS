@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" ng-app="dobbyApp">
+<head>
+  <meta charset="utf-8">
+  <title>Dobby's Photo Gallery</title>
+  <link rel="stylesheet" href="dobby.css">
+  <link rel="stylesheet" href="byod.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.2.0/angular.min.js"></script>
+  
+  <script src="stanford.js"></script>
+  <script src="zepto.js"></script>
+  <script src="byod.js"></script>
+
+  <script src="dobby.js"></script>
+</head>
+<body>
+  <div id="header">
+      <div byod-widget id="widget"></div>
+      <h1>Bring Your Own Data - Dobby's Photo App</h1>
+  </div>
+
+  <div ng-controller="photos.list">
+    <div ng-repeat="photo in photos">
+      <label>{{photo.title}}</label>
+      <img ng-src="{{photo.data}}">
+    </div>
+
+    <div ng-hide="!connected">
+      <input type="file" multiple add-photo-button placeholder="Upload photo">
+      <button ng-click='clearPhotos()'>Clear photos</button>
+    </div>
+  </div>
+
+</body>
+</html>
+
+
