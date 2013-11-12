@@ -1,0 +1,44 @@
+#widget{float:right;margin:20px;}
+
+.byod-ls-connected, .byod-db-connected {
+  display: none;
+}
+
+body.dobby {
+  background-color: #222;
+  color: #fff;
+}
+
+.scrolly{
+  
+}
+
+.scrolly li{
+  list-style-type: none;
+}
+
+.scrolly .photo{
+  float: left;
+  margin: 0px 10px 10px 0px;
+  height: 280px;
+}
+
+.scrolly .photo .photo-label{
+  display: inline-block;
+  width: 100%;
+  color: #fff;
+}
+
+.scrolly .photo img{
+  display: inline-block;
+  max-height: 250px;
+}
+
+.dobby input[type="file"] {
+  display: none;
+}
+
+.tall {
+  margin-top: 20px;
+  height: 50px;
+}

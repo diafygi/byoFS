@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en" ng-app="dobbyApp">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Dobby's Photo Gallery</title>
+  <link rel="stylesheet" href="dobby.css">
+  <link rel="stylesheet" href="byod.css">
+  <link rel="stylesheet" href="bootstrap.css">
+
+  <script src="angular.js"></script>
+
+  <script src="stanford.js"></script>
+  <script src="zepto.js"></script>
+  <script src="byod.js"></script>
+
+  <script src="dobby.js"></script>
+</head>
+<body class="dobby">
+  <div class="container">
+    <div class="row">
+      <div id="header">
+        <div byod-widget id="widget"></div>
+      </div>
+    </div>
+
+    <div ng-controller="photos.list">
+      <div class="row">  
+        <div class="col-xs-12 col-md-4">
+          <h1>Dobby's Photo Journal</h1>
+          <h3>Simple byoDB secure storage</h3>
+        </div>
+
+        <div class="col-xs-12 col-md-3 col-md-offset-5" ng-hide="!connected">
+          <input type="search" ng-model="query" placeholder="Search">
+        </div>
+      </div>
+
+      <div class="row tall" ng-hide="!connected">
+        <div class="col-xs-3">
+          <button class="btn col-xs-12" file-upload target="file-upload">Upload Photos</button>
+          <input id="file-upload" type="file" multiple add-photo-button>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-xs-12 scrolly">
+          <li ng-repeat="photo in photos | filter:{title:query} track by $index" class="photo">
+            <label class="label photo-label">{{photo.title}}
+              <a remove-photo>x</a>
+            </label>
+            <img ng-src="{{photo.data}}">
+          </li>
+        </div>
+      </div>
+
+      <div class="row" ng-hide="!connected">
+        <button ng-click='clearPhotos()'>Delete all</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+
+
