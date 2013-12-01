@@ -9,24 +9,7 @@ When you make a webapp, you usually have to also setup a dynamic server to serve
 
 byoFS aims to eleminate the need to run a dynamic server when developing webapps. Many users nowadays have some sort of personal data storage (Dropbox, Google Drive, etc.), so why not utilize that storage to keep the user data your webapp needs? That way, yous can just server a static webapp file (cheap and easy).
 
-# User Storage Options
-
-* [Dropbox](https://www.dropbox.com) (working)
-* [Google Drive](https://drive.google.com/) (in progress)
-* [remoteStorage](http://remotestorage.io/) (in progress)
-* [Box.com](https://box.com/) (in progress)
-* [SpiderOak](https://example.com/) (in progress)
-* [AWS S3](https://example.com/) (in progress)
-* [Rackspace CloudFiles](https://example.com/) (in progress)
-* [localStorage](https://example.com/) (working, maily used for testing, not recommended for production)s
-
-# Security
-
-*"But why would I send my app's data to a third party?"*
-
-byoFS includes the [Stanford Javascript Crypto Library](https://example.com/), and by default your data is encrypted before it sent to the connected datastore.
-
-**How to Use**
+# How to Use
 
 ```javascript
 //insert a widget for "myapp" into "mydiv"
@@ -48,11 +31,22 @@ byoFS("myapp", "#mydiv", function(fs){
 });
 ```
 
-There are only three functions used: byoFS(), write(), and read(). *byoFS()* sets up the widget, *write()* writes files to the connected datastore, and *read()* reads files from the connected datastore.
+There are only three functions in this library. `byoFS()` sets up the widget, `fs.write()` writes files to the connected datastore, and `fs.read()` reads files from the connected datastore. See the API section for full details.
+
+# User Storage Options
+
+* [Dropbox](https://www.dropbox.com) (working)
+* [Google Drive](https://drive.google.com/) (planned)
+* [remoteStorage](http://remotestorage.io/) (planned)
+* [Box.com](https://box.com/) (planned)
+* [SpiderOak](https://example.com/) (planned)
+* [AWS S3](https://example.com/) (planned)
+* [Rackspace CloudFiles](https://example.com/) (planned)
+* [localStorage](https://example.com/) (working, maily used for testing, not recommended for production)s
 
 # API
 
-## byoFS(*appname, selector, callback[, options]*)
+### byoFS(*appname, selector, callback*)
 
 `appname` is a string that will be prefixed to all files written to the filesystem.
 
@@ -60,18 +54,24 @@ There are only three functions used: byoFS(), write(), and read(). *byoFS()* set
 
 `callback` is a function that is called when the user connects a datastore. That datastore object `fs` is passed as the first argument to the callback function.
 
-`options` is an object that can override the default setup options. Below are the possible options with their defaults.
+### fs
 
-> encrypt_data: whether to encrypt the contents of files (default is true)
-> hash_filenames: whether to hash the filenames after the appname prefix (default is true)
-> chunk_size: size of chunks if the file is bigger than one chunk (default is 5000000 (5MB))
+`fs` is
 
-## fs
+### fs.read(*filename, callback*)
 
-## fs.read(*filename, callback*)
+`fs.read()` is
 
-## fs.write(*filename, data, callback[, options]*)
+### fs.write(*filename, data, callback)
 
-## xhr
+`fs.write()` is
+
+### xhr
 
 `xhr` is the returned object by the read and write callbacks. It is a normal vanilla xhr object. However, if byoFS had a problem decrypting the return of a "200 OK" request, the xhr 200 status code will be updated to an error status code and message.
+
+# Security
+
+*"But why would I send my app's data to a third party?"*
+
+byoFS includes the [Stanford Javascript Crypto Library](https://example.com/), and by default your data is encrypted before it sent to the connected datastore.
