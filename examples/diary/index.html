@@ -262,136 +262,146 @@
                     //insert the BYOD connection button and behavior
                     setWidget: function(target, callback){
                         //insert button html into target
-                        $(target).html(templates['auth']);
+                        document.querySelector(target).innerHTML = templates['auth'];
 
                         /////////////
                         // DROPBOX //
                         /////////////
 
                         //add dropbox click binder to connection button
-                        $(target).find(".byod-auth-db").one("click", function(e){
+                        document.querySelector(target).querySelector(".byod-auth-db").addEventListener("click", function(e){
                             e.preventDefault();
                             //open dropbox oauth window
                             window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=9xzbrduyt7rznbw", "_blank");
 
                             //insert dropbox token/decrypt form and behavior
-                            $(target).html(templates['db']);
-                            $(target).find(".byod-reset").one("click", function(e){
+                            document.querySelector(target).innerHTML = templates['db'];
+                            document.querySelector(target).querySelector(".byod-reset").addEventListener("click", function(e){
                                 e.preventDefault();
                                 BYOD.setWidget(target, callback);
                             });
-                            $(target).find(".byod-db-submit").one("click", function(e){
+                            document.querySelector(target).querySelector(".byod-db-submit").addEventListener("click", function(e){
                                 e.preventDefault();
-                                $(target).html(templates['dbcon']);
+                                document.querySelector(target).innerHTML = templates['dbcon'];
+
+                                //build oauth token parameter
+                                var params = "code=" + encodeURIComponent(e.target.parentElement.parentElement.querySelector(".byod-db-code").value);
+                                params += "&grant_type=authorization_code";
+                                params += "&client_id=9xzbrduyt7rznbw"; //"byod" drobox app
+                                params += "&client_secret=g7jnj93mqluqazh";
 
                                 //take submitted code and get a oauth token
-                                $.ajax({
-                                    type: "POST",
-                                    url: "https://api.dropbox.com/1/oauth2/token",
-                                    data: {
-                                        "code": $(e.target).parents(".byod-db").find(".byod-db-code").val(),
-                                        "grant_type": "authorization_code",
-                                        "client_id": "9xzbrduyt7rznbw", //"byod" drobox app
-                                        "client_secret": "g7jnj93mqluqazh",
-                                    },
-                                    dataType: "json",
-                                    success: function(data){
-                                        //set profile get/post functions
-                                        var token = data['access_token'];
-                                        var pass = $(e.target).parents(".byod-db").find(".byod-db-pass").val();
-                                        var profile = {
-                                            get: function(name, callback){
-                                                name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
-                                                $.ajax({
-                                                    type: "GET",
-                                                    url: "https://api-content.dropbox.com/1/files/sandbox/" + name + ".txt",
-                                                    dataType: "text",
-                                                    success: function(data){
-                                                        data = sjcl.decrypt(pass, $.parseJSON(data));
-                                                        callback(data);
-                                                    },
-                                                    error: function(xhr) {
-                                                        if(xhr.status == 404){
-                                                            callback(null);
-                                                        }
-                                                        else{
-                                                            console.log("errorget");
-                                                            console.log(xhr);
-                                                        }
-                                                    },
-                                                    beforeSend: function(xhr) {
-                                                       xhr.setRequestHeader("Authorization", "Bearer " + token);
-                                                    },
-                                                });
-                                            },
-                                            post: function(name, data, callback){
-                                                name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
-                                                //null data means delete
-                                                if(data === null){
-                                                    $.ajax({
-                                                        type: "POST",
-                                                        url: "https://api.dropbox.com/1/fileops/delete",
-                                                        data: {
-                                                            root: "sandbox",
-                                                            path: name + ".txt",
-                                                        },
-                                                        dataType: "json",
-                                                        success: function(data){
-                                                            callback(true);
-                                                        },
-                                                        error: function(xhr) {
-                                                            if(xhr.status == 404){
-                                                                callback(null);
+                                var xhr_t = new XMLHttpRequest();
+                                xhr_t.open("POST", "https://api.dropbox.com/1/oauth2/token");
+                                xhr_t.onreadystatechange = function(){
+                                    if(xhr_t.readyState === 4){
+                                        if(xhr_t.status === 200){
+                                            //set profile get/post functions
+                                            var token = JSON.parse(xhr_t.responseText)['access_token'];
+                                            var pass = e.target.parentElement.parentElement.querySelector(".byod-db-pass").value;
+                                            var profile = {
+                                                get: function(name, callback){
+                                                    name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
+                                                    var xhr = new XMLHttpRequest();
+                                                    xhr.open("GET", "https://api-content.dropbox.com/1/files/sandbox/" + name + ".txt");
+                                                    xhr.onreadystatechange = function(){
+                                                        if(xhr.readyState === 4){
+                                                            if(xhr.status === 200){
+                                                                try{
+                                                                    var data = sjcl.decrypt(pass, JSON.parse(xhr.responseText));
+                                                                    callback(data);
+                                                                }
+                                                                catch(error){
+                                                                    console.log(error);
+                                                                    alert("Couldn't decrypt :(");
+                                                                    BYOD.setWidget(target, callback);
+                                                                }
                                                             }
                                                             else{
-                                                                console.log("errordel");
-                                                                console.log(xhr);
+                                                                if(xhr.status == 404){
+                                                                    callback(null);
+                                                                }
+                                                                else{
+                                                                    console.log("errorget");
+                                                                    console.log(xhr);
+                                                                }
                                                             }
-                                                        },
-                                                        beforeSend: function(xhr) {
-                                                           xhr.setRequestHeader("Authorization", "Bearer " + token);
-                                                        },
-                                                    });
-                                                }
-                                                //not-null data means new file or update existing file
-                                                else{
-                                                    data = JSON.stringify(sjcl.encrypt(pass, data));
-                                                    $.ajax({
-                                                        type: "POST",
-                                                        url: "https://api-content.dropbox.com/1/files_put/sandbox/" + name + ".txt",
-                                                        data: data,
-                                                        contentType: "text/plain",
-                                                        dataType: "json",
-                                                        success: function(data){
-                                                            callback(true);
-                                                        },
-                                                        error: function(xhr) {
-                                                            console.log("errorpost");
-                                                            console.log(xhr);
-                                                        },
-                                                        beforeSend: function(xhr) {
-                                                           xhr.setRequestHeader("Authorization", "Bearer " + token);
-                                                        },
-                                                    });
-                                                }
-                                            },
-                                        };
-                                        //mark widget as connected before callback
-                                        $(target).html(templates['dbconnected']);
-                                        
-                                        callback(profile);
-                                    },
-                                    error: function(xhr) {
-                                        if(xhr.status == 400){
-                                            alert("Something went wrong :( Did you copy your code correctly?");
-                                            BYOD.setWidget(target, callback);
+                                                        }
+                                                    };
+                                                    xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                    xhr.send();
+                                                },
+                                                post: function(name, data, callback){
+                                                    name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
+                                                    //null data means delete
+                                                    if(data === null){
+                                                        var xhr = new XMLHttpRequest();
+                                                        xhr.open("POST", "https://api.dropbox.com/1/fileops/delete?root=sandbox&path=" + name + ".txt");
+                                                        xhr.onreadystatechange = function(){
+                                                            if(xhr.readyState === 4){
+                                                                if(xhr.status === 200){
+                                                                    callback(true);
+                                                                }
+                                                                else{
+                                                                    if(xhr.status == 404){
+                                                                        callback(null);
+                                                                    }
+                                                                    else{
+                                                                        console.log("errordel");
+                                                                        console.log(xhr);
+                                                                    }
+                                                                }
+                                                            }
+                                                        };
+                                                        xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                        xhr.send();
+                                                    }
+                                                    //not-null data means new file or update existing file
+                                                    else{
+                                                        data = JSON.stringify(sjcl.encrypt(pass, data));
+                                                        var xhr = new XMLHttpRequest();
+                                                        xhr.open("POST", "https://api-content.dropbox.com/1/files_put/sandbox/" + name + ".txt");
+                                                        xhr.onreadystatechange = function(){
+                                                            if(xhr.readyState === 4){
+                                                                if(xhr.status === 200){
+                                                                    callback(true);
+                                                                }
+                                                                else{
+                                                                    if(xhr.status == 404){
+                                                                        callback(null);
+                                                                    }
+                                                                    else{
+                                                                        console.log("errorpost");
+                                                                        console.log(xhr);
+                                                                    }
+                                                                }
+                                                            }
+                                                        };
+                                                        xhr.setRequestHeader("Authorization", "Bearer " + token);
+                                                        xhr.setRequestHeader("Content-Type", "text/plain");
+                                                        xhr.send(data);
+                                                    }
+                                                },
+                                            };
+                                            //mark widget as connected before callback
+                                            document.querySelector(target).innerHTML = templates['dbconnected'];
+                                            
+                                            callback(profile);
                                         }
                                         else{
-                                            console.log("errortoken");
-                                            console.log(xhr);
+                                            if(xhr_t.status == 400){
+                                                alert("Something went wrong :( Did you copy your code correctly?");
+                                                BYOD.setWidget(target, callback);
+                                            }
+                                            else{
+                                                console.log("errortoken");
+                                                console.log(xhr_t);
+                                            }
                                         }
-                                    },
-                                });
+                                    }
+                                };
+                                xhr_t.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+                                xhr_t.send(params);
                             });
                         });
 
@@ -400,18 +410,18 @@
                         //////////////////
 
                         //add localStorage click binder to connection button
-                        $(target).find(".byod-auth-ls").one("click", function(e){
+                        document.querySelector(target).querySelector(".byod-auth-ls").addEventListener("click", function(e){
                             e.preventDefault();
                             //insert dropbox token/decrypt form and behavior
-                            $(target).html(templates['ls']);
-                            $(target).find(".byod-reset").one("click", function(e){
+                            document.querySelector(target).innerHTML = templates['ls'];
+                            document.querySelector(target).querySelector(".byod-reset").addEventListener("click", function(e){
                                 e.preventDefault();
                                 BYOD.setWidget(target, callback);
                             });
-                            $(target).find(".byod-ls-submit").one("click", function(e){
+                            document.querySelector(target).querySelector(".byod-ls-submit").addEventListener("click", function(e){
                                 e.preventDefault();
                                 //set profile get/post functions
-                                var pass = $(e.target).parents(".byod-ls").find(".byod-ls-pass").val();
+                                var pass = e.target.parentElement.parentElement.querySelector(".byod-ls-pass").value;
                                 var profile = {
                                     get: function(name, callback){
                                         name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash("byod-"+name));
@@ -437,7 +447,7 @@
                                     },
                                 };
                                 //mark widget as connected before callback
-                                $(target).html(templates['lsconnected']);
+                                document.querySelector(target).innerHTML = templates['lsconnected'];
                                 callback(profile);
                             });
                         });
@@ -644,6 +654,7 @@
                     return;
                 }
                 catch(error){
+                    console.log("error");
                     console.log(error);
                     alert("Couldn't decrypt from that password :(");
                     app_init();
