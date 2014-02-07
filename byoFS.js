@@ -128,10 +128,10 @@ var byoFS = (function(){
                 xhr_t.onreadystatechange = function(){
                     if(xhr_t.readyState === 4){
                         if(xhr_t.status === 200){
-                            //set profile read/write functions
+                            //set read/write functions
                             var token = JSON.parse(xhr_t.responseText)['access_token'];
                             var pass = e.target.parentElement.parentElement.querySelector(".byoFS-db-pass").value;
-                            var profile = {
+                            var fs = {
                                 read: function(name, callback){
                                     name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
                                     var xhr = new XMLHttpRequest();
@@ -140,23 +140,36 @@ var byoFS = (function(){
                                         if(xhr.readyState === 4){
                                             if(xhr.status === 200){
                                                 try{
-                                                    var data = sjcl.decrypt(pass, JSON.parse(xhr.responseText));
-                                                    callback(data);
+                                                    var data = {
+                                                        statusText: "200 OK",
+                                                        responseText: sjcl.decrypt(pass, JSON.parse(xhr.responseText)),
+                                                    };
                                                 }
                                                 catch(error){
                                                     console.log(error);
-                                                    alert("Couldn't decrypt :(");
-                                                    byoFS(appname, target, callback);
+                                                    var data = {
+                                                        statusText: "401 Unauthorized",
+                                                        responseText: "Unable to decrypt :(",
+                                                    };
                                                 }
+                                                callback(data);
                                             }
                                             else{
                                                 if(xhr.status == 404){
-                                                    callback(null);
+                                                    var data = {
+                                                        statusText: "404 Not Found",
+                                                        responseText: null,
+                                                    };
                                                 }
                                                 else{
                                                     console.log("errorget");
                                                     console.log(xhr);
+                                                    var data = {
+                                                        statusText: xhr.statusText,
+                                                        responseText: xhr.responseText,
+                                                    };
                                                 }
+                                                callback(data);
                                             }
                                         }
                                     };
@@ -172,15 +185,25 @@ var byoFS = (function(){
                                         xhr.onreadystatechange = function(){
                                             if(xhr.readyState === 4){
                                                 if(xhr.status === 200){
-                                                    callback(true);
+                                                    callback({
+                                                        statusText: "200 OK",
+                                                        responseText: "successfully deleted",
+                                                    });
                                                 }
                                                 else{
                                                     if(xhr.status == 404){
-                                                        callback(null);
+                                                        callback({
+                                                            statusText: "404 Not Found",
+                                                            responseText: null,
+                                                        });
                                                     }
                                                     else{
                                                         console.log("errordel");
                                                         console.log(xhr);
+                                                        callback({
+                                                            statusText: xhr.statusText,
+                                                            responseText: xhr.responseText,
+                                                        });
                                                     }
                                                 }
                                             }
@@ -196,15 +219,25 @@ var byoFS = (function(){
                                         xhr.onreadystatechange = function(){
                                             if(xhr.readyState === 4){
                                                 if(xhr.status === 200){
-                                                    callback(true);
+                                                    callback({
+                                                        statusText: "200 OK",
+                                                        responseText: "successfully written",
+                                                    });
                                                 }
                                                 else{
                                                     if(xhr.status == 404){
-                                                        callback(null);
+                                                        callback({
+                                                            statusText: "404 Not Found",
+                                                            responseText: null,
+                                                        });
                                                     }
                                                     else{
                                                         console.log("errorwrite");
                                                         console.log(xhr);
+                                                        callback({
+                                                            statusText: xhr.statusText,
+                                                            responseText: xhr.responseText,
+                                                        });
                                                     }
                                                 }
                                             }
@@ -218,7 +251,7 @@ var byoFS = (function(){
                             //mark widget as connected before callback
                             document.querySelector(target).innerHTML = templates['dbconnected'];
                             
-                            callback(profile);
+                            callback(fs);
                         }
                         else{
                             if(xhr_t.status == 400){
@@ -252,15 +285,32 @@ var byoFS = (function(){
             });
             document.querySelector(target).querySelector(".byoFS-ls-submit").addEventListener("click", function(e){
                 e.preventDefault();
-                //set profile read/write functions
+                //set read/write functions
                 var pass = e.target.parentElement.parentElement.querySelector(".byoFS-ls-pass").value;
-                var profile = {
+                var fs = {
                     read: function(name, callback){
                         name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
-                        if(localStorage[appname + "-" + name])
-                            data = sjcl.decrypt(pass, localStorage[appname + "-" +name]);
-                        else
-                            data = null;
+                        if(localStorage[appname + "-" + name]){
+                            try{
+                                var data = {
+                                    statusText: "200 OK",
+                                    responseText: sjcl.decrypt(pass, localStorage[appname + "-" +name]),
+                                };
+                            }
+                            catch(error){
+                                console.log(error);
+                                var data = {
+                                    statusText: "401 Unauthorized",
+                                    responseText: "Unable to decrypt :(",
+                                };
+                            }
+                        }
+                        else{
+                            var data = {
+                                statusText: "404 Not Found",
+                                responseText: null,
+                            };
+                        }
                         callback(data);
                     },
                     write: function(name, data, callback){
@@ -269,18 +319,24 @@ var byoFS = (function(){
                         if(data === null){
                             if(localStorage[appname + "-" + name] !== undefined)
                                 localStorage.removeItem(appname + "-" + name);
-                            callback(true);
+                            callback({
+                                statusText: "200 OK",
+                                responseText: "successfully deleted",
+                            });
                         }
                         //not-null data means new file or update existing file
                         else{
                             localStorage.setItem(appname + "-" + name, sjcl.encrypt(pass, data));
-                            callback(true);
+                            callback({
+                                statusText: "200 OK",
+                                responseText: "successfully written",
+                            });
                         }
                     },
                 };
                 //mark widget as connected before callback
                 document.querySelector(target).innerHTML = templates['lsconnected'];
-                callback(profile);
+                callback(fs);
             });
         });
     };

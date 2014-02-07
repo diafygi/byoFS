@@ -3,7 +3,7 @@
     <head>
         <title>Bring Your Own Data - My Diary</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <script src="../../byoFS.min.js"></script>
+        <script src="../../byoFS.js"></script>
         <script src="zepto.min.js"></script>
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
@@ -68,7 +68,7 @@
                 load: "Loading...",
             };
             var ids = [];
-            var db;
+            var fs;
 
             function ts_to_str(timestamp){
                 var t = new Date(parseInt(timestamp));
@@ -98,7 +98,7 @@
                     $("#add-submitting").show();
                     //update entry
                     if($("#add-id").val()){
-                        db.write("entry"+id, $("#add-text").val(), function(){
+                        fs.write("entry"+id, $("#add-text").val(), function(){
                             setup_app('update');
                         });
                     }
@@ -106,9 +106,9 @@
                     else{
                         //id format: YYYY-MM-DD_HH:MM:SS
                         var new_id = new Date().getTime();
-                        db.write("entry"+new_id, $("#add-text").val(), function(){
+                        fs.write("entry"+new_id, $("#add-text").val(), function(){
                             ids.unshift(new_id);
-                            db.write("index", JSON.stringify(ids), function(){
+                            fs.write("index", JSON.stringify(ids), function(){
                                 setup_app('add');
                             });
                         });
@@ -148,8 +148,9 @@
                         if($("#"+id).find(".entry-toggle").text() == "[+]"){
                             if($("#"+id).find(".entry-raw").val() == ""){
                                 $("#"+id).find(".entry-text").text("Loading...");
-                                db.read("entry"+id, function(data){
-                                    if(data === null)
+                                fs.read("entry"+id, function(pxhr){
+                                    var data = pxhr.responseText;
+                                    if(pxhr.statusText === "404 Not Found")
                                         data = "";
                                     $("#"+id).find(".entry-raw").val(data);
                                     $("#"+id).find(".entry-text").html(data.replace(/\n/g, '<br>'));
@@ -175,8 +176,8 @@
                         var id = $(e.target).parents(".entry-id").attr("id");
                         if(confirm("Are you sure you want to delete this entry?")){
                             ids.splice(ids.indexOf(parseInt(id)), 1);
-                            db.write("index", JSON.stringify(ids), function(){
-                                db.write("entry"+id, null, function(){
+                            fs.write("index", JSON.stringify(ids), function(){
+                                fs.write("entry"+id, null, function(){
                                     setup_app('del');
                                 });
                             });
@@ -188,42 +189,43 @@
             function setup_app(msg_key){
                 $("#message").html(message['load']);
                 //see if the index exists
-                try{
-                    db.read("index", function(data){
-                        //no index, assume registration and create index file
-                        if(data == null){
-                            $("#message").html(message['reg1']);
-                            db.write("index", JSON.stringify([]), function(){
-                                $("#message").html(message['reg2']);
-                                setup_app();
-                            });
-                            return;
-                        }
-                        //index found
-                        else{
-                            if(msg_key)
-                                $("#message").html(message[msg_key])
-                            else
-                                $("#message").html("");
-                            ids = $.parseJSON(data);
-                            load_entries();
-                        }
-                    });
-                    return;
-                }
-                catch(error){
-                    console.log("error");
-                    console.log(error);
-                    alert("Couldn't decrypt from that password :(");
-                    app_init();
-                }
+                fs.read("index", function(pxhr){
+                    //no index, assume registration and create index file
+                    if(pxhr.statusText === "404 Not Found"){
+                        $("#message").html(message['reg1']);
+                        fs.write("index", JSON.stringify([]), function(){
+                            $("#message").html(message['reg2']);
+                            setup_app();
+                        });
+                        return;
+                    }
+                    //bad password
+                    else if(pxhr.statusText === "401 Unauthorized"){
+                        alert("Couldn't decrypt with that password :(")
+                        app_init();
+                    }
+                    //some other error occurred
+                    else if(pxhr.statusText !== "200 OK"){
+                        alert("Something went wrong :(")
+                        app_init();
+                    }
+                    //index found
+                    else{
+                        if(msg_key)
+                            $("#message").html(message[msg_key])
+                        else
+                            $("#message").html("");
+                        ids = $.parseJSON(pxhr.responseText);
+                        load_entries();
+                    }
+                });
             }
 
             //initialize app
             function app_init(){
                 $("#message").html(message['init'])
-                byoFS("mydiary", "#widget", function(connected_db){
-                    db = connected_db;
+                byoFS("mydiary", "#widget", function(connected_fs){
+                    fs = connected_fs;
                     setup_app();
                 });
             }
@@ -232,17 +234,17 @@
         <script>
             /*
             //debug test
-            byoFS("mydiary", "#widget", function(db){
+            byoFS("mydiary", "#widget", function(fs){
                 console.log("connected!");
-                db.write("testfile", "testdata", function(){
+                fs.write("testfile", "testdata", function(pxhr){
                     console.log("write callback!");
-                    db.read("testfile", function(data){
-                        console.log(data);
-                        db.write("testfile", null, function(){
+                    fs.read("testfile", function(pxhr){
+                        console.log(pxhr.responseText);
+                        fs.write("testfile", null, function(pxhr){
                             console.log("deleted!");
-                            db.read("testfile", function(data){
-                                console.log(data);
-                                db.write("testfile", null, function(){
+                            fs.read("testfile", function(pxhr){
+                                console.log(pxhr.responseText);
+                                fs.write("testfile", null, function(pxhr){
                                     console.log("deleted2!");
                                 });
                             });
@@ -250,7 +252,7 @@
                     });
                 });
             });
-            */
+            //*/
         </script>
     </body>
 </html>
