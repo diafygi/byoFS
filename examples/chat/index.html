@@ -169,6 +169,13 @@
                 return rsa3.decrypt(enc);
             }
 
+            //show a popup of the code
+            function show_code(e){
+                e.preventDefault();
+                console.log(e.target.title);
+                prompt("Copy the below code and send it to the person you want to chat with.", e.target.title);
+            }
+
             //generate a new public key
             function gen_code(e){
                 e.preventDefault();
@@ -183,16 +190,19 @@
 
                 //write public key to file
                 document.getElementById("state").innerHTML = "Saving new chat code...";
-                fs.write("pub-" + id, kp['pub'], function(){
+                fs.write({"name": "pub-"+id, "pub": true}, kp['pub'], function(pxhr){
                     //update index with new key pair
                     index[id] = {
-                        "kp_cache": kp,
+                        "id": id,
+                        "kp": kp,
+                        "pub_url": pxhr.responseText,
                     };
+                    var b64_code = window.btoa("pub=" + index[id]['pub_url']);
                     fs.write("index", JSON.stringify(index), function(){
-                        document.getElementById("state").innerHTML = 'Send this <a href="#######################" target="_blank">link</a> to the person you want to chat with.';
+                        document.getElementById("state").innerHTML = 'Here is your <a id="new_b64_code" href="#" title="'+b64_code+'">code</a>.';
+                        document.getElementById("new_b64_code").addEventListener("click", show_code);
                     });
-                });
-                //##########################
+                }, true);
             }
 
             //input a remote public key
@@ -269,61 +279,6 @@
                 });
             }
             app_init();
-        </script>
-        <script>
-            /*
-            //rsa debug test
-            var bits = 512;
-            var pass_array = new Uint32Array(6);
-            window.crypto.getRandomValues(pass_array);
-            var pass = "";
-            for (var i = 0; i < pass_array.length; i++) {
-                pass += pass_array[i].toString(16);
-            }
-            pass = pass.substring(0, bits / 16 - 6);
-
-            var rsa1 = new RSAKey();
-            rsa1.generate(bits, "10001");
-            var pubstr = rsa1.n.toString(16) + "," + rsa1.e.toString(16);
-            var privstr = rsa1.n.toString(16) + "," + rsa1.e.toString(16) + "," + rsa1.d.toString(16) + "," + rsa1.p.toString(16) + "," + rsa1.q.toString(16) + "," + rsa1.dmp1.toString(16) + "," + rsa1.dmq1.toString(16) + "," + rsa1.coeff.toString(16);
-            console.log("pubstr=%s", pubstr);
-            console.log("privstr=%s", privstr);
-
-            var rsa2 = new RSAKey();
-            var pub = pubstr.split(",");
-            rsa2.setPublic(pub[0], pub[1]);
-            var enc = rsa2.encrypt(pass);
-            console.log("rsa_enc=%s", enc);
-
-            var rsa3 = new RSAKey();
-            var priv = privstr.split(",");
-            rsa3.setPrivateEx(priv[0], priv[1], priv[2], priv[3], priv[4], priv[5], priv[6], priv[7]);
-            var dec = rsa3.decrypt(enc);
-            console.log("rsa_dec=%s", dec);
-            //*/
-
-
-            /*
-            //debug test
-            byoFS("mydiary", "#widget", function(fs){
-                console.log("connected!");
-                fs.write("testfile", "testdata", function(pxhr){
-                    console.log("write callback!");
-                    fs.read("testfile", function(pxhr){
-                        console.log(pxhr.responseText);
-                        fs.write("testfile", null, function(pxhr){
-                            console.log("deleted!");
-                            fs.read("testfile", function(pxhr){
-                                console.log(pxhr.responseText);
-                                fs.write("testfile", null, function(pxhr){
-                                    console.log("deleted2!");
-                                });
-                            });
-                        });
-                    });
-                });
-            });
-            //*/
         </script>
     </body>
 </html>
