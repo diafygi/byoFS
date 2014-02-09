@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html style="height:100%">
+    <head>
+        <title>Bring Your Own Chat - Proof of Concept</title>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+        <script src="../../byoFS.min.js"></script>
+        <style>
+            /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
+            html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
+            strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas,
+            details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {margin:0; padding:0; border:0; font-size:100%; font:inherit; vertical-align:baseline;}
+            /* HTML5 display-role reset for older browsers */
+            article, aside, details, figcaption, figure, footer, header, hgroup, menu, nav, section {display:block;} body {line-height: 1;} ol, ul {list-style: none;}
+            blockquote, q {quotes: none;} blockquote:before, blockquote:after, q:before, q:after {content:''; content:none;} table {border-collapse:collapse; border-spacing:0;}
+        </style>
+        <style>
+            /*App CSS goes here*/
+            #widget{float:right;}
+            body{font-family:sans-serif;background-color:#f3f3f3;color:#333333;height:100%;}
+            #header{z-index:2;padding:10px;min-height:15%;}
+            #header h1{height:20px;overflow:hidden;font-size:18px;font-weight:bold;}
+            #settings-row{height:40px;overflow:hidden;}
+            #setup{display:inline-block;margin-top:15px;}
+            #setup li{display:inline-block;margin-right:5px;}
+            #setup a{padding:5px;font-size:14px;border:1px solid #333333;text-decoration:none;background-color:#333333;color:#f3f3f3;}
+            #saved{display:inline-block;}
+            #saved select{background:#dddddd;padding:5px;font-size:14px;line-height:1;border:1px solid #333333;border-radius:0;}
+            #content{width:calc(100% - 40px);margin:10px;padding:10px;border:1px solid #333333;background-color:#f3f3f3;position:fixed;top:85px;bottom:0px;}
+            #close{display:block;position:absolute;right:3px;top:3px;text-decoration:none;color:#999999;font-size:15px;}
+            #close:hover{color:#333333;}
+            #chat{display:block;position:absolute;bottom:30px;top:10px;width:calc(100% - 50px);background-color:#dddddd;padding:10px;margin-bottom:10px;overflow-y:auto;}
+            .line{background-color:#f3f3f3;margin:5px 10px;display:inline-block;padding:10px;}
+            .right{text-align:right;}
+            .right .line{border-radius:10px 10px 0 10px;}
+            .left{text-align:left;}
+            .left .line{border-radius:10px 10px 10px 0;}
+            .author{font-family:monospace;font-size:14px;}
+            .message{font-size:16px;font-family:serif;padding-top:10px;}
+            #content form{display:block;position:absolute;bottom:5px;width:calc(100% - 20px);}
+            #in{padding:5px;border:1px solid #333333;border-radius:0;width:calc(100% - 114px);min-width:50%;}
+            #go{padding:5px;border:0;border-radius:0;background-color:#333333;color:#f3f3f3;width:90px;}
+        </style>
+    </head>
+    <body>
+        <!--HTML Goes Here-->
+        <div id="header">
+            <div id="widget"></div>
+            <h1>Bring Your Own Chat (an example <a href="https://github.com/diafygi/byoFS" target="_blank">byoFS</a> app)</h1>
+            <div id="settings-row">
+                <ul id="setup">
+                    <li><a id="gen_code" href="#">Create a new Chat Code</a></li>
+                    <li><a id="dec_code" href="#">Received a Chat Code?</a></li>
+                </ul>
+                <div id="saved">
+                    <select id="saved-list">
+                        <option value="blank_state" selected>Previously Saved Chats</option>
+                        <option value="load_123456">Chat 123456</li>
+                        <option value="load_123457">Chat 123456</li>
+                        <option value="load_123458">Chat 123456</li>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div id="content">
+            <a id="close" href="#" title="close">X</a>
+            <div id="chat">
+                <div class="left">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">diafygi:</div>
+                        <div class="message">Howdy :)</div>
+                    </div>
+                </div>
+                <div class="right">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">zaki:</div>
+                        <div class="message">This is my message!</div>
+                    </div>
+                </div>
+                <div class="left">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">diafygi:</div>
+                        <div class="message">I received your message</div>
+                    </div>
+                </div>
+                <div class="right">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">zaki:</div>
+                        <div class="message">10-4 good buddy</div>
+                    </div>
+                </div>
+                <div class="left">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">diafygi:</div>
+                        <div class="message">Howdy :)</div>
+                    </div>
+                </div>
+                <div class="right">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">zaki:</div>
+                        <div class="message">This is my message!</div>
+                    </div>
+                </div>
+                <div class="left">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">diafygi:</div>
+                        <div class="message">I received your message</div>
+                    </div>
+                </div>
+                <div class="right">
+                    <div class="line">
+                        <div class="author" title="2014-01-01 01:21:34 UTC">zaki:</div>
+                        <div class="message">10-4 good buddy</div>
+                    </div>
+                </div>
+            </div>
+            <form>
+                <input id="in" placeholder="type message here"/>
+                <input id="go" type="submit" value="Submit"/>
+            </form>
+        </div>
+
+        <!--App code goes here-->
+        <script>
+
+        </script>
+        <script>
+            ///*
+            //debug test
+            byoFS("mydiary", "#widget", function(fs){
+                console.log("connected!");
+                fs.write("testfile", "testdata", function(pxhr){
+                    console.log("write callback!");
+                    fs.read("testfile", function(pxhr){
+                        console.log(pxhr.responseText);
+                        fs.write("testfile", null, function(pxhr){
+                            console.log("deleted!");
+                            fs.read("testfile", function(pxhr){
+                                console.log(pxhr.responseText);
+                                fs.write("testfile", null, function(pxhr){
+                                    console.log("deleted2!");
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+            //*/
+        </script>
+    </body>
+</html>
