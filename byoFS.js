@@ -168,6 +168,14 @@ var byoFS = (function(){
                                     xhr.send();
                                 },
                                 write: function(name, data, callback){
+                                    //accept name as either string or object with public info
+                                    var is_pub = false;
+                                    if(typeof(name) !== "string"){
+                                        if(name['pub'] !== undefined)
+                                            is_pub = name['pub'];
+                                        if(name['name'] !== undefined)
+                                            name = name['name'];
+                                    }
                                     name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
                                     //null data means delete
                                     if(data === null){
@@ -182,20 +190,12 @@ var byoFS = (function(){
                                                     });
                                                 }
                                                 else{
-                                                    if(xhr.status == 404){
-                                                        callback({
-                                                            statusText: "404 Not Found",
-                                                            responseText: null,
-                                                        });
-                                                    }
-                                                    else{
-                                                        console.log("errordel");
-                                                        console.log(xhr);
-                                                        callback({
-                                                            statusText: xhr.statusText,
-                                                            responseText: xhr.responseText,
-                                                        });
-                                                    }
+                                                    console.log("errordel");
+                                                    console.log(xhr);
+                                                    callback({
+                                                        statusText: xhr.statusText,
+                                                        responseText: xhr.responseText,
+                                                    });
                                                 }
                                             }
                                         };
@@ -204,32 +204,54 @@ var byoFS = (function(){
                                     }
                                     //not-null data means new file or update existing file
                                     else{
-                                        data = JSON.stringify(sjcl.encrypt(pass, data));
+                                        if(!is_pub)
+                                            data = JSON.stringify(sjcl.encrypt(pass, data));
                                         var xhr = new XMLHttpRequest();
                                         xhr.open("POST", "https://api-content.dropbox.com/1/files_put/sandbox/" + appname + "-" + name + ".txt");
                                         xhr.onreadystatechange = function(){
                                             if(xhr.readyState === 4){
                                                 if(xhr.status === 200){
-                                                    callback({
-                                                        statusText: "200 OK",
-                                                        responseText: "successfully written",
-                                                    });
-                                                }
-                                                else{
-                                                    if(xhr.status == 404){
-                                                        callback({
-                                                            statusText: "404 Not Found",
-                                                            responseText: null,
-                                                        });
+                                                    //get public link if made public
+                                                    if(is_pub){
+                                                        var xhr_pub = new XMLHttpRequest();
+                                                        xhr_pub.open("POST", "https://api.dropbox.com/1/shares/sandbox/" + appname + "-" + name + ".txt?short_url=false");
+                                                        xhr_pub.onreadystatechange = function(){
+                                                            if(xhr_pub.readyState === 4){
+                                                                if(xhr_pub.status === 200){
+                                                                    var url_pub = JSON.parse(xhr_pub.responseText)['url'];
+                                                                    url_pub = url_pub.replace("www.dropbox.com", "dl.dropboxusercontent.com");
+                                                                    callback({
+                                                                        statusText: "200 OK",
+                                                                        responseText: url_pub,
+                                                                    });
+                                                                }
+                                                                else{
+                                                                    console.log("errorshare");
+                                                                    console.log(xhr_pub);
+                                                                    callback({
+                                                                        statusText: xhr_pub.statusText,
+                                                                        responseText: xhr_pub.responseText,
+                                                                    });
+                                                                }
+                                                            }
+                                                        };
+                                                        xhr_pub.setRequestHeader("Authorization", "Bearer " + token);
+                                                        xhr_pub.send();
                                                     }
                                                     else{
-                                                        console.log("errorwrite");
-                                                        console.log(xhr);
                                                         callback({
-                                                            statusText: xhr.statusText,
-                                                            responseText: xhr.responseText,
+                                                            statusText: "200 OK",
+                                                            responseText: "successfully written",
                                                         });
                                                     }
+                                                }
+                                                else{
+                                                    console.log("errorwrite");
+                                                    console.log(xhr);
+                                                    callback({
+                                                        statusText: xhr.statusText,
+                                                        responseText: xhr.responseText,
+                                                    });
                                                 }
                                             }
                                         };
@@ -305,6 +327,9 @@ var byoFS = (function(){
                         callback(data);
                     },
                     write: function(name, data, callback){
+                        //localStorage can't be public, so ignore flag
+                        if(typeof(name) !== "string")
+                            name = name['name'];
                         name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
                         //null data means delete
                         if(data === null){

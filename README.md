@@ -15,7 +15,7 @@ This type of setup is generally referred to as [unhosted](https://unhosted.org).
 
 *"But why would I send my app's data to an arbitrary third party?"*
 
-byoFS includes the [Stanford Javascript Crypto Library](https://crypto.stanford.edu/sjcl/), and data is encrypted before it is sent to the connected datastore (i.e. client-side crypto). This allows you to securely store data on the user's choice of third party datastore.
+byoFS includes the [Stanford Javascript Crypto Library](https://crypto.stanford.edu/sjcl/), and non-public data is encrypted before it is sent to the connected datastore (i.e. client-side crypto). This allows you to securely store data on the user's choice of third party datastore. If you mark a file as public, it will not be encrypted.
 
 This philosophy of splitting up app vs. datastore also has privacy advantages for the user. It allows neither the app nor the datastore to know the contents user's data. The app server just sees an anonymous request, and the datastore server just sees encrypted files.
 
@@ -32,7 +32,7 @@ This library's API is purposefully minimal to keep the code clean and easy to au
       //insert a widget for "myapp" into "mydiv"
       byoFS("myapp", "#mydiv", function(fs){
 
-        //when a datastore is connected, write "Hello World!" to "myfile"
+        //when a datastore is connected, write "Hello World!" to the private "myfile"
         fs.write("myfile", "Hello World!", function(pxhr){
 
           //when the file is written, read the contents back
@@ -41,7 +41,37 @@ This library's API is purposefully minimal to keep the code clean and easy to au
             //when the contents are returned, print in the console ("Hello World!")
             console.log(pxhr.responseText);
 
+              //delete the file
+              fs.write("myfile", null, function(pxhr){
+
+                //check to see if the file is deleted
+                fs.read("myfile", function(pxhr){
+
+                  //non-existent files return a "404 Not Found" statusText
+                  console.log(pxhr.statusText);
+
+                });
+
+              });
+
+            });
+
           });
+
+        });
+
+        //write a public file (NOT ENCRYPTED!)
+        fs.write({name: "mypubfile", pub: true}, "Hello Public!", function(pxhr){
+
+          //anyone can now retrieve the file
+          var xhr = new XMLHttpRequest();
+          xhr.open("GET", pxhr.responseText);
+          xhr.onreadystatechange = function(){
+            if(xhr.readyState === 4 && xhr.status === 200){
+              console.log(xhr.responseText); //"Hello Public!"
+            }
+          };
+          xhr.send();
 
         });
 
@@ -64,11 +94,13 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 
 `fs` is a filesystem object that has `read()` and `write()` functions.
 
-### fs.read(*filename, callback*)
+### fs.read(*filename or file_conf, callback*)
 
 `fs.read()` is the function that retrieves data from the filesystem based on filename.
 
 `filename` is a string that is the location of the file.
+
+`file_conf` is an object with "name" and "pub" keys that contain the filename and public/private setting, respectivly. `{name: <filename>, pub: true/false}`
 
 `callback` is a function that is called when the file is retrieved. A pseudo-XMLHttpRequest‎ object `xhr` is passed as the first argument to the callback function.
 
@@ -88,7 +120,7 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 
 `pxhr.statusText` contains the same responses as a normal [xhr.statusText](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest#Properties). However, if byoFS had a problem decrypting the return of a "200 OK" request, the statusText will be updated to an error status code and message.
 
-`pxhr.responseText` contains the contents of the response similar to [xhr.responseText](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest#Properties). This is always returns a string or null, so if you encode another filetype to a string during `fs.write()`, you will need to decode it.
+`pxhr.responseText` contains the contents of the response similar to [xhr.responseText](https://developer.mozilla.org/en-US/docs/Web/API/XMLHttpRequest#Properties). This is always returns a string or null, so if you encode another filetype to a string during `fs.write()`, you will need to decode it. If you have set a file as public, the `pxhr.responseText` for your `fs.write()` callback will be the public direct link to the file.
 
 ## User Storage Options
 
