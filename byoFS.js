@@ -76,7 +76,7 @@ var byoFS = (function(){
     }
     //reference html templates
     var templates = {
-        auth: '<div class="byoFS-auth"><p>Load from:</p><ul><li><a href="#" class="byoFS-auth-db">Dropbox</a></li><li><a href="#" class="byoFS-auth-ls">localStorage</a></li></ul></div>',
+        auth: '<div class="byoFS-auth"><p>Load from:</p><ul><li><a href="#" class="byoFS-auth-db">Dropbox</a></li><li style="display:none;"><a href="#" class="byoFS-auth-ls">localStorage</a></li></ul></div>',
         db: '<div class="byoFS-db"><p>Dropbox Code:</p><p><input class="byoFS-db-code"></p><p>Decrypt Password:</p><p><input type="password" class="byoFS-db-pass"></p><p><a href="#" class="byoFS-db-submit">Decrypt</a> <a href="#" class="byoFS-reset">Go Back</a></p></div>',
         dbcon: '<div class="byoFS-db-connecting"><p>Verifying...</p></div>',
         dbconnected: '<div class="byoFS-db-connected"><p>Connected!</p></div>',
