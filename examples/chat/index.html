@@ -3,7 +3,8 @@
     <head>
         <title>Bring Your Own Chat - Proof of Concept</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-        <script src="../../byoFS.min.js"></script>
+        <script src="../../byoFS.js"></script>
+        <script src="rsa.min.js"></script>
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
             html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
@@ -17,8 +18,9 @@
             /*App CSS goes here*/
             #widget{float:right;}
             body{font-family:sans-serif;background-color:#f3f3f3;color:#333333;height:100%;}
-            #header{z-index:2;padding:10px;min-height:15%;}
+            #header{z-index:2;display:block;position:absolute;left:0px;top:0px;width:calc(100% - 20px);padding:10px;}
             #header h1{height:20px;overflow:hidden;font-size:18px;font-weight:bold;}
+            #state{height:16px;overflow:hidden;font-size:14px;font-style:italic;}
             #settings-row{height:40px;overflow:hidden;}
             #setup{display:inline-block;margin-top:15px;}
             #setup li{display:inline-block;margin-right:5px;}
@@ -46,10 +48,11 @@
         <div id="header">
             <div id="widget"></div>
             <h1>Bring Your Own Chat (an example <a href="https://github.com/diafygi/byoFS" target="_blank">byoFS</a> app)</h1>
+            <div id="state"></div>
             <div id="settings-row">
                 <ul id="setup">
-                    <li><a id="gen_code" href="#">Create a new Chat Code</a></li>
-                    <li><a id="dec_code" href="#">Received a Chat Code?</a></li>
+                    <li><a id="gen_code" href="#">Create a new chat code</a></li>
+                    <li><a id="get_code" href="#">Received a chat code?</a></li>
                 </ul>
                 <div id="saved">
                     <select id="saved-list">
@@ -121,10 +124,186 @@
 
         <!--App code goes here-->
         <script>
+            //global settings
+            var bits = 512;
+            var fs;
+            var index = {};
 
+            //create new password to be shared
+            function new_pass(len){
+                var pass_array = new Uint32Array(64);
+                window.crypto.getRandomValues(pass_array);
+                var pass = "";
+                for (var i = 0; i < pass_array.length; i++) {
+                    pass += pass_array[i].toString(16);
+                }
+                if(len === undefined)
+                    return pass.substring(0, bits / 16 - 6);
+                else
+                    return pass.substring(0, len);
+            }
+
+            //create new public private key pair
+            function new_rsa(){
+                var rsa1 = new RSAKey();
+                rsa1.generate(bits, "10001");
+                return {
+                    "pub": rsa1.n.toString(16) + "," + rsa1.e.toString(16),
+                    "priv": rsa1.n.toString(16) + "," + rsa1.e.toString(16) + "," + rsa1.d.toString(16) + "," + rsa1.p.toString(16) + "," + rsa1.q.toString(16) + "," + rsa1.dmp1.toString(16) + "," + rsa1.dmq1.toString(16) + "," + rsa1.coeff.toString(16),
+                }
+            }
+
+            //encrypt string with public key
+            function enc_rsa(str, pubstr){
+                var rsa2 = new RSAKey();
+                var pub = pubstr.split(",");
+                rsa2.setPublic(pub[0], pub[1]);
+                return rsa2.encrypt(str);
+            }
+
+            //decyrpt string with private key
+            function dec_rsa(str, privstr){
+                var rsa3 = new RSAKey();
+                var priv = privstr.split(",");
+                rsa3.setPrivateEx(priv[0], priv[1], priv[2], priv[3], priv[4], priv[5], priv[6], priv[7]);
+                return rsa3.decrypt(enc);
+            }
+
+            //generate a new public key
+            function gen_code(e){
+                e.preventDefault();
+                document.getElementById("state").innerHTML = "Generating new chat code...";
+                //gen new id
+                var id = new_pass(8);
+                while(index[id] !== undefined)
+                    id = new_pass(8);
+
+                //generate new key pair
+                var kp = new_rsa();
+
+                //write public key to file
+                document.getElementById("state").innerHTML = "Saving new chat code...";
+                fs.write("pub-" + id, kp['pub'], function(){
+                    //update index with new key pair
+                    index[id] = {
+                        "kp_cache": kp,
+                    };
+                    fs.write("index", JSON.stringify(index), function(){
+                        document.getElementById("state").innerHTML = 'Send this <a href="#######################" target="_blank">link</a> to the person you want to chat with.';
+                    });
+                });
+                //##########################
+            }
+
+            //input a remote public key
+            function get_code(e){
+                e.preventDefault();
+                document.getElementById("state").innerHTML = "Waiting for chat code input...";
+                //##########################
+            }
+
+            function load_data(chat_id){
+                //hide chat window if no chat selected
+                if(chat_id === undefined){
+                    document.getElementById("content").style.display = "none";
+                }
+                else{
+                    document.getElementById("content").style.display = "block";
+                    //load chat history and start monitoring other side#########################
+                }
+
+                //add previous chats to history dropdown
+                var out = '<option value="blank_state" selected>Previously Saved Chats</option>';
+                for(var k in index)
+                    out += '<option value="' + index[k]['id'] + '">Chat ' + index[k]['id'] + '</li>';
+                document.getElementById("saved-list").innerHTML = out;
+                //######################change dropdown chat history#############
+
+                //bind click events to gen/get code buttons
+                document.getElementById("gen_code").addEventListener("click", gen_code);
+                document.getElementById("get_code").addEventListener("click", get_code);
+
+                //show settings-row
+                document.getElementById("settings-row").style.display = "block";
+                document.getElementById("state").innerHTML = "Ready to rock and roll!";
+            }
+
+            function setup_app(){
+                document.getElementById("state").innerHTML = "Setting up...";
+                //see if the index exists
+                fs.read("index", function(pxhr){
+                    //no index, assume registration and create index file
+                    if(pxhr.statusText === "404 Not Found"){
+                        document.getElementById("state").innerHTML = "No index found, creating one...";
+                        fs.write("index", JSON.stringify({}), function(){
+                            setup_app();
+                        });
+                    }
+                    //bad password
+                    else if(pxhr.statusText === "401 Unauthorized"){
+                        alert("Couldn't decrypt with that password :(")
+                        app_init();
+                    }
+                    //some other error occurred
+                    else if(pxhr.statusText !== "200 OK"){
+                        alert("Something went wrong :(")
+                        app_init();
+                    }
+                    //index found
+                    else{
+                        //load chat history
+                        document.getElementById("state").innerHTML = "Parsing index...";
+                        index = JSON.parse(pxhr.responseText);
+                        load_data();
+                    }
+                });
+            }
+
+            function app_init(){
+                document.getElementById("state").innerHTML = "Click the Dropbox icon to connect! --->";
+                document.getElementById("settings-row").style.display = "none";
+                document.getElementById("content").style.display = "none";
+                byoFS("byoChat", "#widget", function(connected_fs){
+                    fs = connected_fs;
+                    setup_app();
+                });
+            }
+            app_init();
         </script>
         <script>
-            ///*
+            /*
+            //rsa debug test
+            var bits = 512;
+            var pass_array = new Uint32Array(6);
+            window.crypto.getRandomValues(pass_array);
+            var pass = "";
+            for (var i = 0; i < pass_array.length; i++) {
+                pass += pass_array[i].toString(16);
+            }
+            pass = pass.substring(0, bits / 16 - 6);
+
+            var rsa1 = new RSAKey();
+            rsa1.generate(bits, "10001");
+            var pubstr = rsa1.n.toString(16) + "," + rsa1.e.toString(16);
+            var privstr = rsa1.n.toString(16) + "," + rsa1.e.toString(16) + "," + rsa1.d.toString(16) + "," + rsa1.p.toString(16) + "," + rsa1.q.toString(16) + "," + rsa1.dmp1.toString(16) + "," + rsa1.dmq1.toString(16) + "," + rsa1.coeff.toString(16);
+            console.log("pubstr=%s", pubstr);
+            console.log("privstr=%s", privstr);
+
+            var rsa2 = new RSAKey();
+            var pub = pubstr.split(",");
+            rsa2.setPublic(pub[0], pub[1]);
+            var enc = rsa2.encrypt(pass);
+            console.log("rsa_enc=%s", enc);
+
+            var rsa3 = new RSAKey();
+            var priv = privstr.split(",");
+            rsa3.setPrivateEx(priv[0], priv[1], priv[2], priv[3], priv[4], priv[5], priv[6], priv[7]);
+            var dec = rsa3.decrypt(enc);
+            console.log("rsa_dec=%s", dec);
+            //*/
+
+
+            /*
             //debug test
             byoFS("mydiary", "#widget", function(fs){
                 console.log("connected!");
