@@ -125,9 +125,31 @@
         <!--App code goes here-->
         <script>
             //global settings
-            var bits = 512;
+            var BITS = 512;
             var fs;
             var index = {};
+            var local_cache = {};
+            var remote_cache = {};
+            /*
+            index = {
+                "<chat_id>": {
+                    "local": {
+                        "pub": <local_public_key_string>,
+                        "pub_url": <public_url_of_local_public_key>,
+                        "priv": <local_private_key_string>,
+                        "key": <shared_key_string>,
+                        "key_url": <public_url_of_shared_key_encrypted_with_remote_public_key>,
+                        "log_url": <public_url_of_local_side_of_chat>,
+                    },
+                    "remote": {
+                        "pub": <remote_public_key_string>,
+                        "pub_url": <public_url_of_remote_public_key>,
+                        "key_url": <public_url_of_shared_key_encrypted_with_local_public_key>,
+                        "log_url": <public_url_of_remote_chat_log_encrypted_with_shared_key>,
+                    },
+                }
+            }
+            */
 
             //create new password to be shared
             function new_pass(len){
@@ -137,16 +159,13 @@
                 for (var i = 0; i < pass_array.length; i++) {
                     pass += pass_array[i].toString(16);
                 }
-                if(len === undefined)
-                    return pass.substring(0, bits / 16 - 6);
-                else
-                    return pass.substring(0, len);
+                return pass.substring(0, len);
             }
 
             //create new public private key pair
             function new_rsa(){
                 var rsa1 = new RSAKey();
-                rsa1.generate(bits, "10001");
+                rsa1.generate(BITS, "10001");
                 return {
                     "pub": rsa1.n.toString(16) + "," + rsa1.e.toString(16),
                     "priv": rsa1.n.toString(16) + "," + rsa1.e.toString(16) + "," + rsa1.d.toString(16) + "," + rsa1.p.toString(16) + "," + rsa1.q.toString(16) + "," + rsa1.dmp1.toString(16) + "," + rsa1.dmq1.toString(16) + "," + rsa1.coeff.toString(16),
@@ -166,19 +185,28 @@
                 var rsa3 = new RSAKey();
                 var priv = privstr.split(",");
                 rsa3.setPrivateEx(priv[0], priv[1], priv[2], priv[3], priv[4], priv[5], priv[6], priv[7]);
-                return rsa3.decrypt(enc);
+                return rsa3.decrypt(str);
             }
 
             //show a popup of the code
             function show_code(e){
                 e.preventDefault();
-                console.log(e.target.title);
                 prompt("Copy the below code and send it to the person you want to chat with.", e.target.title);
             }
 
+            //search current index for public key reference
+            function search_using_ref(ref){
+                for(var k in index){
+                    if(index[k]['local'] !== undefined && index[k]['local']['pub_url'] === ref)
+                        return k;
+                }
+                return null;
+            }
+
             //generate a new public key
-            function gen_code(e){
-                e.preventDefault();
+            function gen_code(e, callback){
+                if(e !== null)
+                    e.preventDefault();
                 document.getElementById("state").innerHTML = "Generating new chat code...";
                 //gen new id
                 var id = new_pass(8);
@@ -187,29 +215,213 @@
 
                 //generate new key pair
                 var kp = new_rsa();
+                index[id] = {"local": kp};
 
                 //write public key to file
-                document.getElementById("state").innerHTML = "Saving new chat code...";
+                document.getElementById("state").innerHTML = "Saving new key pair...";
                 fs.write({"name": "pub-"+id, "pub": true}, kp['pub'], function(pxhr){
-                    //update index with new key pair
-                    index[id] = {
-                        "id": id,
-                        "kp": kp,
-                        "pub_url": pxhr.responseText,
-                    };
-                    var b64_code = window.btoa("pub=" + index[id]['pub_url']);
-                    fs.write("index", JSON.stringify(index), function(){
-                        document.getElementById("state").innerHTML = 'Here is your <a id="new_b64_code" href="#" title="'+b64_code+'">code</a>.';
-                        document.getElementById("new_b64_code").addEventListener("click", show_code);
+                    //update index with new key pair and public url
+                    index[id]['local']['pub_url'] = pxhr.responseText;
+
+                    //generate placeholder key file
+                    document.getElementById("state").innerHTML = "Saving new shared key...";
+                    fs.write({"name": "key-"+id, "pub": true}, "", function(pxhr){
+                        index[id]['local']['key_url'] = pxhr.responseText;
+
+                        //generate placeholder log file
+                        document.getElementById("state").innerHTML = "Saving new chat...";
+                        fs.write({"name": "log-"+id, "pub": true}, "", function(pxhr){
+                            index[id]['local']['log_url'] = pxhr.responseText;
+
+                            //generate placeholder log file
+                            document.getElementById("state").innerHTML = "Chat created! Updating index...";
+                            fs.write("index", JSON.stringify(index), function(){
+                                //if there was a callback, call that
+                                if(callback !== undefined){
+                                    callback(id);
+                                }
+                                //no callback defaults to showing code
+                                else{
+                                    var b64_code = window.btoa(JSON.stringify({
+                                        "pub": index[id]['local']['pub_url'],
+                                        "key": index[id]['local']['key_url'],
+                                        "log": index[id]['local']['log_url'],
+                                    }));
+                                    document.getElementById("state").innerHTML = 'Here is your <a id="new_b64_code" href="#" title="'+b64_code+'">chat code</a>.';
+                                    document.getElementById("new_b64_code").addEventListener("click", show_code);
+                                }
+                            });
+                        });
+
                     });
-                }, true);
+                });
             }
 
             //input a remote public key
             function get_code(e){
                 e.preventDefault();
+                //get user to input received chat code and convert to chat config
                 document.getElementById("state").innerHTML = "Waiting for chat code input...";
-                //##########################
+                var conf = prompt("Paste the code you received.");
+                if(conf === null || conf === "")
+                    return;
+                conf = JSON.parse(window.atob(conf));
+
+                //retrieve public key
+                document.getElementById("state").innerHTML = "Retrieving their public key...";
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", conf['pub']);
+                xhr.onreadystatechange = function(){
+                    if(xhr.readyState === 4){
+                        if(xhr.status !== 200){
+                            document.getElementById("state").innerHTML = "Error retrieving their public key :(";
+                        }
+                        else{
+                            //see if any existing chats that are based on one of the local public key urls
+                            var remote_pub = xhr.responseText;
+                            var cur_id = search_using_ref(conf['ref']);
+
+                            //no existing chat, so make a new one
+                            if(cur_id === null){
+                                document.getElementById("state").innerHTML = "No existing chat matches, creating new...";
+                                //create placeholder files
+                                gen_code(null, function(new_id){
+
+                                    //update placeholder files using received public key
+                                    document.getElementById("state").innerHTML = "Creating new shared key...";
+                                    index[new_id]['local']['key'] = new_pass(parseInt(BITS / 16 - 6));
+                                    var enc_key = enc_rsa(index[new_id]['local']['key'], remote_pub);
+                                    fs.write({"name": "key-"+new_id, "pub": true}, enc_key, function(pxhr){
+                                        index[new_id]['local']['key'] = pxhr.responseText;
+
+                                        //update chat log placeholder with shared key
+                                        document.getElementById("state").innerHTML = "Creating new chat...";
+                                        local_cache[new_id] = [];
+                                        var new_log = sjcl.encrypt(index[new_id]['local']['key'], JSON.stringify(local_cache[new_id]));
+                                        fs.write({"name": "log-"+new_id, "pub": true}, JSON.stringify(new_log), function(pxhr){
+                                            index[new_id]['local']['log_url'] = pxhr.responseText;
+
+                                            //update the index with all the new configuration
+                                            document.getElementById("state").innerHTML = "Updating index with new chat...";
+                                            index[new_id]['remote'] = {
+                                                "pub": remote_pub,
+                                                "pub_url": conf['pub'],
+                                                "key_url": conf['key'],
+                                                "log_url": conf['log'],
+                                            };
+                                            fs.write("index", JSON.stringify(index), function(){
+                                                //show message with response code
+                                                var b64_code = window.btoa(JSON.stringify({
+                                                    "ref": index[new_id]['remote']['pub_url'],
+                                                    "pub": index[new_id]['local']['pub_url'],
+                                                    "key": index[new_id]['local']['key_url'],
+                                                    "log": index[new_id]['local']['log_url'],
+                                                }));
+                                                document.getElementById("state").innerHTML = 'Chat created! Reply with this new <a id="new_b64_code" href="#" title="'+b64_code+'">chat code</a>.';
+                                                document.getElementById("new_b64_code").addEventListener("click", show_code);
+                                                console.log("Good to go3!");//########################
+                                            });
+                                        });
+                                    });
+                                });
+                            }
+                            //chat exists!
+                            else{
+                                //ask for override if remote public key isnt the same as index value
+                                if(index[cur_id]['remote'] !== undefined && index[cur_id]['remote']['pub'] !== remote_pub){
+                                    if(!confirm("The person you are chatting with seems to have changed their key! Press OK to override and use their new key.")){
+                                        document.getElementById("state").innerHTML = "Couldn't load chat :(";
+                                        return;
+                                    }
+                                }
+                                //update local shared key and chat log to match remote's
+                                index[cur_id]['remote'] = {
+                                    "pub": remote_pub,
+                                    "pub_url": conf['pub'],
+                                    "key_url": conf['key'],
+                                    "log_url": conf['log'],
+                                }
+                                //get shared key from remote
+                                document.getElementById("state").innerHTML = "Verifying chat key...";
+                                var xhr_key = new XMLHttpRequest();
+                                xhr_key.open("GET", conf['key']);
+                                xhr_key.onreadystatechange = function(){
+                                    if(xhr_key.readyState === 4){
+                                        if(xhr_key.status !== 200){
+                                            document.getElementById("state").innerHTML = "Error verifying their chat key :(";
+                                        }
+                                        else{
+                                            //decrypt shared key using local private key
+                                            var remote_shared = dec_rsa(xhr_key.responseText, index[cur_id]['local']['priv']);
+
+                                            //ask for override if remote shared doesn't match
+                                            if(index[cur_id]['local']['key'] !== undefined && index[cur_id]['local']['key'] !== remote_shared){
+                                                if(!confirm("The shared chat encryption doesn't match! Press OK to override and re-encrypt using the received key.")){
+                                                    document.getElementById("state").innerHTML = "Couldn't load chat :(";
+                                                    return;
+                                                }
+                                            }
+
+                                            //update shared key using remote public
+                                            document.getElementById("state").innerHTML = "Updating chat key...";
+                                            var enc_key = enc_rsa(remote_shared, index[cur_id]['remote']['pub']);
+                                            fs.write({"name": "key-"+cur_id, "pub": true}, enc_key, function(pxhr){
+
+                                                //re-encrypt using shared key if not the same (already asked for confirmation above)
+                                                if(index[cur_id]['local']['key'] !== undefined && index[cur_id]['local']['key'] !== remote_shared){
+                                                    document.getElementById("state").innerHTML = "Re-encrypting using new chat key...";
+                                                    var xhr_re = new XMLHttpRequest();
+                                                    xhr_re.open("GET", index[cur_id]['local']['log_url']);
+                                                    xhr_re.onreadystatechange = function(){
+                                                        if(xhr_re.readyState === 4){
+                                                            if(xhr_re.status !== 200){
+                                                                //re-encrypt
+                                                                local_cache[cur_id] = sjcl.decrypt(index[cur_id]['local']['key'], JSON.parse(xhr_re.responseText));
+                                                                var enc_log = sjcl.encrypt(remote_shared, JSON.stringify(local_cache[cur_id]));
+                                                                //save re-encrypted file
+                                                                fs.write({"name": "log-"+cur_id, "pub": true}, enc_log, function(pxhr){
+
+                                                                    //update index
+                                                                    document.getElementById("state").innerHTML = "Updating index with re-encryption...";
+                                                                    index[cur_id]['local']['key'] = remote_shared;
+                                                                    fs.write("index", JSON.stringify(index), function(){
+                                                                        document.getElementById("state").innerHTML = "Re-encrypted chat ready!";
+                                                                        console.log("Good to go1!");//########################
+                                                                    });
+                                                                });
+                                                            }
+                                                        }
+                                                    };
+                                                    xhr_re.send();
+                                                }
+                                                //no previously existing shared key, so set the received one and initialize chat log
+                                                else{
+                                                    //encrypt new empty chat log
+                                                    document.getElementById("state").innerHTML = "Creating new chat...";
+                                                    var enc_log = sjcl.encrypt(remote_shared, JSON.stringify([]));
+                                                    //save initialized chat log
+                                                    fs.write({"name": "log-"+cur_id, "pub": true}, enc_log, function(pxhr){
+
+                                                        //update index
+                                                        document.getElementById("state").innerHTML = "Updating index with new chat...";
+                                                        index[cur_id]['local']['key'] = remote_shared;
+                                                        fs.write("index", JSON.stringify(index), function(){
+                                                            document.getElementById("state").innerHTML = "New chat ready!";
+                                                            console.log("Good to go2!");//########################
+                                                        });
+                                                    });
+                                                }
+                                            });
+
+                                        }
+                                    }
+                                };
+                                xhr_key.send();
+                            }
+                        }
+                    }
+                };
+                xhr.send();
             }
 
             function load_data(chat_id){
