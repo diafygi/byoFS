@@ -106,7 +106,7 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 
 ### fs.write(*filename or file_conf, data, callback*)
 
-`fs.write()` is the function that retrieves data from the filesystem based on filename.
+`fs.write()` is the function that writes data to the filesystem based on filename.
 
 `filename` is a string that is the location of the file.
 
