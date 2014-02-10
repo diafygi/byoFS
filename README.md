@@ -96,21 +96,21 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 
 `fs` is a filesystem object that has `read()` and `write()` functions.
 
-### fs.read(*filename or file_conf, callback*)
+### fs.read(*filename, callback*)
 
 `fs.read()` is the function that retrieves data from the filesystem based on filename.
 
 `filename` is a string that is the location of the file.
 
-`file_conf` is an object with "name" and "pub" keys that contain the filename and public/private setting, respectivly. `{name: <filename>, pub: true/false}`
-
 `callback` is a function that is called when the file is retrieved. A pseudo-XMLHttpRequest‎ object `xhr` is passed as the first argument to the callback function.
 
-### fs.write(*filename, data, callback*)
+### fs.write(*filename or file_conf, data, callback*)
 
 `fs.write()` is the function that retrieves data from the filesystem based on filename.
 
 `filename` is a string that is the location of the file.
+
+`file_conf` is an object with "name" and "pub" keys that contain the filename and public/private setting, respectivly. `{name: <filename>, pub: true/false}`
 
 `data` is a string that is the contents of the file. NOTE: only strings are currently accepted, so you will need to encode any other filetypes to a string.
 
