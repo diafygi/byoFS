@@ -130,6 +130,12 @@
             var index = {};
             var local_cache = {};
             var remote_cache = {};
+            var CHECK_INTERVAL = 2000;
+            var WAIT_ID;
+            var WAIT = null;
+            var MONITOR_ID;
+            var MONITOR = null;
+            var FAILED = 0;
             /*
             index = {
                 "<chat_id>": {
@@ -201,6 +207,225 @@
                         return k;
                 }
                 return null;
+            }
+
+            function create_message(e){
+                e.preventDefault();
+                document.getElementById("state").innerHTML = "Creating new message...";
+
+                //pause monitor and unbind message submission until new message is created
+                stop_monitor();
+                document.getElementById("go").value = "Saving...";
+                document.getElementById("go").removeEventListener('click', create_message, false);
+
+                //push new message to local cache
+                var create_id = MONITOR_ID.toString(); //deep copy id
+                local_cache[MONITOR_ID].push({
+                    "ts": new Date().getTime(),
+                    "v": document.getElementById("in").value,
+                });
+
+                //push local cache to storage
+                console.log("encrypting=%s", JSON.stringify(local_cache[create_id]));
+                var updated_log = sjcl.encrypt(index[create_id]['local']['key'], JSON.stringify(local_cache[create_id]));
+                fs.write({"name": "log-"+create_id, "pub": true}, JSON.stringify(updated_log), function(pxhr){
+                    //re-bind and restart monitor
+                    console.log("new message saved");
+                    document.getElementById("state").innerHTML = "New message saved!";
+                    render_cached_messages();
+                    document.getElementById("go").addEventListener("click", create_message);
+                    document.getElementById("go").value = "Submit";
+                    document.getElementById("in").value = "";
+                    start_monitor();
+                });
+            }
+
+            //render and insert html based on javascript log caches
+            //NOTE: This is enormously inefficienct because it renders the whole chat.
+            //      It would be much better if it looked at the current render and only updated the differences.
+            //      Didn't have time for that, though.
+            function render_cached_messages(){
+
+                //combine both local and remote into one message list
+                var comb_list = [];
+                var render_id = MONITOR_ID.toString(); //deep copy id
+                if(local_cache[render_id] !== undefined)
+                    for(var i = 0; i < local_cache[render_id].length; i++)
+                        comb_list.push({
+                            "author": "you",
+                            "timestamp": local_cache[render_id][i]['ts'],
+                            "message": local_cache[render_id][i]['v'],
+                        });
+                if(remote_cache[render_id] !== undefined)
+                    for(var i = 0; i < remote_cache[render_id].length; i++)
+                        comb_list.push({
+                            "author": "them",
+                            "timestamp": remote_cache[render_id][i]['ts'],
+                            "message": remote_cache[render_id][i]['v'],
+                        });
+                console.log("comb_list");
+                console.log(comb_list);
+
+                //order messages based on timestamp
+                comb_list.sort(function(a, b){
+                    if(a['timestamp'] < b['timestamp'])
+                        return -1;
+                    if(a['timestamp'] > b['timestamp'])
+                        return 1;
+                    return 0;
+                });
+
+                //generate and insert html
+                var out = "";
+                for(var i = 0; i < comb_list.length; i++){
+                    var m = comb_list[i];
+                    var side = m['author'] === "them" ? "left": "right";
+                    out += '<div class="' + side + '">';
+                    out += '    <div class="line">';
+                    out += '        <div class="author" title="' + (new Date(m['timstamp'])).toUTCString() + '">' + m['author'] + ':</div>';
+                    out += '        <div class="message">' + m['message'] + '</div>';
+                    out += '    </div>';
+                    out += '</div>';
+                }
+                document.getElementById("chat").innerHTML = out;
+                document.getElementById("state").innerHTML = "Chat is up to date!";
+            }
+
+            //check currently monitoried chat's remote log for updates
+            function check_chat(){
+                stop_monitor();
+                document.getElementById("state").innerHTML = "Checking for new messages...";
+
+                //request remote chat log
+                var check_id = MONITOR_ID.toString(); //deep copy id
+                var xhr_check = new XMLHttpRequest();
+                xhr_check.open("GET", index[check_id]['remote']['log_url']);
+                xhr_check.onreadystatechange = function(){
+                    if(xhr_check.readyState === 4){
+                        if(xhr_check.status !== 200){
+                            document.getElementById("state").innerHTML = "Check failed...Trying again in " + parseInt(CHECK_INTERVAL/1000) +  " sec...";
+                            start_monitor();
+                        }
+                        else{
+                            //decrypt remote log
+                            console.log("ping: %s", xhr_check.responseText);
+                            var tmp_log;
+                            try{
+                                tmp_log = sjcl.decrypt(index[check_id]['local']['key'], JSON.parse(xhr_check.responseText));
+                                if(typeof(tmp_log) === "string")
+                                    tmp_log = JSON.parse(tmp_log);
+                            }
+                            catch(error){
+                                console.log("ping error");
+                                console.log(error);
+                                try{
+                                    tmp_log = sjcl.decrypt(index[check_id]['local']['key'], xhr_check.responseText);
+                                    if(typeof(tmp_log) === "string")
+                                        tmp_log = JSON.parse(tmp_log);
+                                }
+                                catch(error){
+                                    console.log("ping error2");
+                                    console.log(error);
+                                }
+                            }
+                            //checked cached remote length vs. new remote length
+                            if(typeof(tmp_log) === "object" && (remote_cache[check_id] === undefined || tmp_log.length !== remote_cache[check_id].length)){
+                                remote_cache[check_id] = tmp_log;
+                                document.getElementById("state").innerHTML = "Updating...";
+                                render_cached_messages();
+                            }
+                            else{
+                                document.getElementById("state").innerHTML = "No new messages found.";
+                            }
+                            start_monitor();
+                        }
+                    }
+                };
+                xhr_check.send();
+            }
+
+            //stop monitoring for updates
+            function stop_monitor(){
+                if(MONITOR !== null)
+                    clearInterval(MONITOR);
+            }
+
+            //start monitoring for updates
+            function start_monitor(){
+                stop_monitor();
+                MONITOR = setInterval(check_chat, CHECK_INTERVAL);
+            }
+
+            //update chat history dropdown based on index
+            function update_history(){
+                var out = '<option value="blank_state" selected>Previously Saved Chats</option>';
+                for(var k in index)
+                    out += '<option value="' + k + '">Chat ' + k + '</li>';
+                document.getElementById("saved-list").innerHTML = out;
+                document.getElementById("saved-list").addEventListener("change", function(e){
+                    console.log(e.target);
+                    //######################change event trigger for dropdown chat history#############
+                });
+            }
+
+            //close chat and stop monitoring
+            function close_chat(){
+                stop_monitor();
+                document.getElementById("content").style.display = "none";
+                update_history();
+                document.getElementById("state").innerHTML = "Closed chat.";
+            }
+
+            //reload chat window with selected chat
+            function init_chat(chat_id){
+                //assign global current chat id variable
+                MONITOR_ID = chat_id;
+
+                //show and clear chat window
+                document.getElementById("content").style.display = "block";
+                document.getElementById("chat").innerHTML = "";
+
+                //load cached chats
+                render_cached_messages();
+
+                //bind buttons
+                document.getElementById("close").addEventListener("click", close_chat);
+                document.getElementById("go").addEventListener("click", create_message);
+
+                //check remote chat and start monitor
+                check_chat();
+            }
+
+            //you're ready to chat, but you need to wait for remote to confirm the key
+            function wait_chat(chat_id){
+                //cancel interval while checking wait
+                if(chat_id === undefined)
+                    chat_id = WAIT_ID;
+                WAIT_ID = chat_id;
+                if(WAIT !== null)
+                    clearInterval(WAIT);
+
+                //check to see if remote is setup
+                var wait_id = WAIT_ID.toString(); //deep copy id
+                var xhr_wait = new XMLHttpRequest();
+                xhr_wait.open("GET", index[wait_id]['remote']['log_url']);
+                xhr_wait.onreadystatechange = function(){
+                    if(xhr_wait.readyState === 4){
+                        if(xhr_wait.status !== 200){
+                            console.log("Check failed...Trying again soon...");
+                            WAIT = setInterval(wait_chat, CHECK_INTERVAL);
+                        }
+                        else{
+                            //decrypt remote log
+                            console.log("wait: %s", xhr_wait.responseText);
+                            if(xhr_wait.responseText !== "" && xhr_wait.responseText !== null)
+                                init_chat(wait_id);
+                            else
+                                WAIT = setInterval(wait_chat, CHECK_INTERVAL);
+                        }
+                    }
+                };
+                xhr_wait.send();
             }
 
             //generate a new public key
@@ -292,7 +517,7 @@
                                     index[new_id]['local']['key'] = new_pass(parseInt(BITS / 16 - 6));
                                     var enc_key = enc_rsa(index[new_id]['local']['key'], remote_pub);
                                     fs.write({"name": "key-"+new_id, "pub": true}, enc_key, function(pxhr){
-                                        index[new_id]['local']['key'] = pxhr.responseText;
+                                        index[new_id]['local']['key_url'] = pxhr.responseText;
 
                                         //update chat log placeholder with shared key
                                         document.getElementById("state").innerHTML = "Creating new chat...";
@@ -319,7 +544,7 @@
                                                 }));
                                                 document.getElementById("state").innerHTML = 'Chat created! Reply with this new <a id="new_b64_code" href="#" title="'+b64_code+'">chat code</a>.';
                                                 document.getElementById("new_b64_code").addEventListener("click", show_code);
-                                                console.log("Good to go3!");//########################
+                                                wait_chat(new_id);
                                             });
                                         });
                                     });
@@ -386,7 +611,7 @@
                                                                     index[cur_id]['local']['key'] = remote_shared;
                                                                     fs.write("index", JSON.stringify(index), function(){
                                                                         document.getElementById("state").innerHTML = "Re-encrypted chat ready!";
-                                                                        console.log("Good to go1!");//########################
+                                                                        init_chat(cur_id);
                                                                     });
                                                                 });
                                                             }
@@ -398,7 +623,8 @@
                                                 else{
                                                     //encrypt new empty chat log
                                                     document.getElementById("state").innerHTML = "Creating new chat...";
-                                                    var enc_log = sjcl.encrypt(remote_shared, JSON.stringify([]));
+                                                    local_cache[cur_id] = [];
+                                                    var enc_log = sjcl.encrypt(remote_shared, JSON.stringify(local_cache[cur_id]));
                                                     //save initialized chat log
                                                     fs.write({"name": "log-"+cur_id, "pub": true}, enc_log, function(pxhr){
 
@@ -407,7 +633,7 @@
                                                         index[cur_id]['local']['key'] = remote_shared;
                                                         fs.write("index", JSON.stringify(index), function(){
                                                             document.getElementById("state").innerHTML = "New chat ready!";
-                                                            console.log("Good to go2!");//########################
+                                                            init_chat(cur_id);
                                                         });
                                                     });
                                                 }
@@ -425,21 +651,8 @@
             }
 
             function load_data(chat_id){
-                //hide chat window if no chat selected
-                if(chat_id === undefined){
-                    document.getElementById("content").style.display = "none";
-                }
-                else{
-                    document.getElementById("content").style.display = "block";
-                    //load chat history and start monitoring other side#########################
-                }
-
-                //add previous chats to history dropdown
-                var out = '<option value="blank_state" selected>Previously Saved Chats</option>';
-                for(var k in index)
-                    out += '<option value="' + index[k]['id'] + '">Chat ' + index[k]['id'] + '</li>';
-                document.getElementById("saved-list").innerHTML = out;
-                //######################change dropdown chat history#############
+                //load chat histories into dropdown
+                update_history();
 
                 //bind click events to gen/get code buttons
                 document.getElementById("gen_code").addEventListener("click", gen_code);
@@ -448,6 +661,12 @@
                 //show settings-row
                 document.getElementById("settings-row").style.display = "block";
                 document.getElementById("state").innerHTML = "Ready to rock and roll!";
+
+                //hide chat window if no chat selected
+                if(chat_id === undefined)
+                    document.getElementById("content").style.display = "none";
+                else
+                    init_chat(chat_id);
             }
 
             function setup_app(){
