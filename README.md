@@ -1,6 +1,8 @@
 byoFS.js - Bring Your Own Filesystem
 ====
 
+**NOTE: THIS IS STILL AN EXPERIMENTAL LIBRARY. DO NOT USE FOR PRODUCTION APPLICATIONS YET.**
+
 [**byoFS.js**](https://github.com/diafygi/byoFS/) is a javascript library that allows users to connect their own cloud storage. After a user has connected their data storage location, the library provides read/write functions to that storage location.
 
 ## Why use this library?
