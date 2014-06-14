@@ -224,6 +224,20 @@
                 }
             }
 
+            function reset_index(e){
+                e.preventDefault();
+                document.getElementById("message").innerHTML = "Resetting...";
+                fs.write("index", JSON.stringify([]), function(){
+                    setup_app();
+                });
+            }
+
+            function reload_page(e){
+                e.preventDefault();
+                document.getElementById("message").innerHTML = "Reloading...";
+                location.reload();
+            }
+
             function setup_app(msg_key){
                 document.getElementById("message").innerHTML = message['load'];
                 //see if the index exists
@@ -239,8 +253,9 @@
                     }
                     //bad password
                     else if(pxhr.statusText === "401 Unauthorized"){
-                        alert("Couldn't decrypt with that password :(")
-                        app_init();
+                        document.getElementById("message").innerHTML = "Couldn't decrypt with that password :( <a href='#' id='reload-page'>Try again</a> or <a href='#' id='reset-everything'>Reset everything</a>.";
+                        document.getElementById("reload-page").addEventListener("click", reload_page);
+                        document.getElementById("reset-everything").addEventListener("click", reset_index);
                     }
                     //some other error occurred
                     else if(pxhr.statusText !== "200 OK"){
