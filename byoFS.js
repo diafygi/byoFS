@@ -122,6 +122,9 @@ var byoFS = (function(){
                             //set read/write functions
                             var token = JSON.parse(xhr_t.responseText)['access_token'];
                             var pass = e.target.parentElement.parentElement.querySelector(".byoFS-db-pass").value;
+                            if(pass === ""){
+                                pass = appname;
+                            }
                             var fs = {
                                 read: function(name, callback){
                                     name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));
@@ -300,6 +303,9 @@ var byoFS = (function(){
                 e.preventDefault();
                 //set read/write functions
                 var pass = e.target.parentElement.parentElement.querySelector(".byoFS-ls-pass").value;
+                if(pass === ""){
+                    pass = appname;
+                }
                 var fs = {
                     read: function(name, callback){
                         name = sjcl.codec.hex.fromBits(sjcl.hash.sha256.hash(name));

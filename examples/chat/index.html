@@ -18,6 +18,12 @@
             /*App CSS goes here*/
             #widget{float:right;}
             body{font-family:sans-serif;background-color:#f3f3f3;color:#333333;height:100%;}
+            #modal-wrapper{position:absolute;background-color:#ffffff;opacity:0.9;height:100%;width:100%;text-align:center;z-index:99;}
+            #modal{display:inline-block;background-color:#dddddd;padding:10px;margin-top:50px;width:420px;opacity:1;border-radius:5px;}
+            #modal-X{float:right;text-decoration:none;color:#999999;font-size:15px;}
+            #modal-title{padding:10px 0px;}
+            #modal-txt{width:400px;height:150px;}
+            #modal-close{padding:5px;border:0;border-radius:0;background-color:#333333;color:#f3f3f3;width:90px;}
             #header{z-index:2;display:block;position:absolute;left:0px;top:0px;width:calc(100% - 20px);padding:10px;}
             #header h1{height:20px;overflow:hidden;font-size:18px;font-weight:bold;}
             #state{height:16px;overflow:hidden;font-size:14px;font-style:italic;}
@@ -45,6 +51,14 @@
     </head>
     <body>
         <!--HTML Goes Here-->
+        <div id="modal-wrapper" style="display:none;">
+            <div id="modal">
+                <a href="#" id="modal-X">X</a>
+                <p id="modal-title">Copy the text below.</p>
+                <textarea id="modal-txt">My text to copy</textarea>
+                <button id="modal-submit">Close</button>
+            </div>
+        </div>
         <div id="header">
             <div id="widget"></div>
             <h1>Bring Your Own Chat (an example <a href="https://github.com/diafygi/byoFS" target="_blank">byoFS</a> app)</h1>
@@ -136,6 +150,7 @@
             var MONITOR_ID;
             var MONITOR = null;
             var FAILED = 0;
+            var MODAL_FN = null;
             /*
             index = {
                 "<chat_id>": {
@@ -194,10 +209,45 @@
                 return rsa3.decrypt(str);
             }
 
+            //close modal overlay
+            function close_modal(e){
+                if(e !== undefined){
+                    e.preventDefault();
+                }
+                document.getElementById("modal-wrapper").style.display = "none";
+            }
+
+            //show modal for copying/pasting codes
+            function show_modal(title, txt, submit_txt, callback){
+                document.getElementById("modal-wrapper").style.display = "block";
+
+                document.getElementById("modal-title").innerHTML = title;
+                document.getElementById("modal-txt").value = txt;
+                document.getElementById("modal-submit").innerHTML = submit_txt;
+
+                //add close events
+                document.getElementById("modal-X").removeEventListener("click", close_modal);
+                document.getElementById("modal-X").addEventListener("click", close_modal);
+                document.getElementById("modal-submit").removeEventListener("click", close_modal);
+                document.getElementById("modal-submit").addEventListener("click", close_modal);
+
+                //remove any previous events
+                if(MODAL_FN !== null){
+                    document.getElementById("modal-submit").removeEventListener("click", MODAL_FN);
+                }
+
+                //add a callback event
+                MODAL_FN = null;
+                if(callback !== undefined){
+                    MODAL_FN = callback;
+                    document.getElementById("modal-submit").addEventListener("click", callback);
+                }
+            }
+
             //show a popup of the code
             function show_code(e){
                 e.preventDefault();
-                prompt("Copy the below code and send it to the person you want to chat with.", e.target.title);
+                show_modal("Copy the below code and send it to the person you want to chat with.", e.target.title, "Close", undefined);
             }
 
             //search current index for public key reference
@@ -226,11 +276,9 @@
                 });
 
                 //push local cache to storage
-                console.log("encrypting=%s", JSON.stringify(local_cache[create_id]));
                 var updated_log = sjcl.encrypt(index[create_id]['local']['key'], JSON.stringify(local_cache[create_id]));
                 fs.write({"name": "log-"+create_id, "pub": true}, JSON.stringify(updated_log), function(pxhr){
                     //re-bind and restart monitor
-                    console.log("new message saved");
                     document.getElementById("state").innerHTML = "New message saved!";
                     render_cached_messages();
                     document.getElementById("go").addEventListener("click", create_message);
@@ -263,8 +311,6 @@
                             "timestamp": remote_cache[render_id][i]['ts'],
                             "message": remote_cache[render_id][i]['v'],
                         });
-                console.log("comb_list");
-                console.log(comb_list);
 
                 //order messages based on timestamp
                 comb_list.sort(function(a, b){
@@ -308,26 +354,9 @@
                         }
                         else{
                             //decrypt remote log
-                            console.log("ping: %s", xhr_check.responseText);
-                            var tmp_log;
-                            try{
-                                tmp_log = sjcl.decrypt(index[check_id]['local']['key'], JSON.parse(xhr_check.responseText));
-                                if(typeof(tmp_log) === "string")
-                                    tmp_log = JSON.parse(tmp_log);
-                            }
-                            catch(error){
-                                console.log("ping error");
-                                console.log(error);
-                                try{
-                                    tmp_log = sjcl.decrypt(index[check_id]['local']['key'], xhr_check.responseText);
-                                    if(typeof(tmp_log) === "string")
-                                        tmp_log = JSON.parse(tmp_log);
-                                }
-                                catch(error){
-                                    console.log("ping error2");
-                                    console.log(error);
-                                }
-                            }
+                            var tmp_log = sjcl.decrypt(index[check_id]['local']['key'], JSON.parse(xhr_check.responseText));
+                            if(typeof(tmp_log) === "string")
+                                tmp_log = JSON.parse(tmp_log);
                             //checked cached remote length vs. new remote length
                             if(typeof(tmp_log) === "object" && (remote_cache[check_id] === undefined || tmp_log.length !== remote_cache[check_id].length)){
                                 remote_cache[check_id] = tmp_log;
@@ -412,12 +441,10 @@
                 xhr_wait.onreadystatechange = function(){
                     if(xhr_wait.readyState === 4){
                         if(xhr_wait.status !== 200){
-                            console.log("Check failed...Trying again soon...");
                             WAIT = setInterval(wait_chat, CHECK_INTERVAL);
                         }
                         else{
                             //decrypt remote log
-                            console.log("wait: %s", xhr_wait.responseText);
                             if(xhr_wait.responseText !== "" && xhr_wait.responseText !== null)
                                 init_chat(wait_id);
                             else
@@ -432,8 +459,12 @@
             function gen_code(e, callback){
                 if(e !== null)
                     e.preventDefault();
-                document.getElementById("state").innerHTML = "Generating new chat code...";
+
+                //stop any existing chat
+                close_chat();
+
                 //gen new id
+                document.getElementById("state").innerHTML = "Generating new chat code...";
                 var id = new_pass(8);
                 while(index[id] !== undefined)
                     id = new_pass(8);
@@ -482,14 +513,23 @@
                 });
             }
 
-            //input a remote public key
-            function get_code(e){
+            //get user to input received chat code
+            function input_code(e){
                 e.preventDefault();
-                //get user to input received chat code and convert to chat config
-                document.getElementById("state").innerHTML = "Waiting for chat code input...";
-                var conf = prompt("Paste the code you received.");
+                document.getElementById("state").innerHTML = "Waiting for chat code <a href='#' id='get-input-code'>input</a>...";
+                document.getElementById("get-input-code").addEventListener("click", input_code);
+                show_modal("Paste the code you received.", "", "Submit", get_code);
+            }
+
+            //input a remote public key
+            function get_code(){
+                //get chat code from modal input
+                var conf = document.getElementById("modal-txt").value;
                 if(conf === null || conf === "")
                     return;
+                close_chat();
+
+                //convert chat code to chat config
                 conf = JSON.parse(window.atob(conf));
 
                 //retrieve public key
@@ -604,7 +644,7 @@
                                                                 local_cache[cur_id] = sjcl.decrypt(index[cur_id]['local']['key'], JSON.parse(xhr_re.responseText));
                                                                 var enc_log = sjcl.encrypt(remote_shared, JSON.stringify(local_cache[cur_id]));
                                                                 //save re-encrypted file
-                                                                fs.write({"name": "log-"+cur_id, "pub": true}, enc_log, function(pxhr){
+                                                                fs.write({"name": "log-"+cur_id, "pub": true}, JSON.stringify(enc_log), function(pxhr){
 
                                                                     //update index
                                                                     document.getElementById("state").innerHTML = "Updating index with re-encryption...";
@@ -626,7 +666,7 @@
                                                     local_cache[cur_id] = [];
                                                     var enc_log = sjcl.encrypt(remote_shared, JSON.stringify(local_cache[cur_id]));
                                                     //save initialized chat log
-                                                    fs.write({"name": "log-"+cur_id, "pub": true}, enc_log, function(pxhr){
+                                                    fs.write({"name": "log-"+cur_id, "pub": true}, JSON.stringify(enc_log), function(pxhr){
 
                                                         //update index
                                                         document.getElementById("state").innerHTML = "Updating index with new chat...";
@@ -656,7 +696,7 @@
 
                 //bind click events to gen/get code buttons
                 document.getElementById("gen_code").addEventListener("click", gen_code);
-                document.getElementById("get_code").addEventListener("click", get_code);
+                document.getElementById("get_code").addEventListener("click", input_code);
 
                 //show settings-row
                 document.getElementById("settings-row").style.display = "block";
@@ -667,6 +707,18 @@
                     document.getElementById("content").style.display = "none";
                 else
                     init_chat(chat_id);
+            }
+
+            function reset_index(){
+                document.getElementById("state").innerHTML = "Resetting...";
+                fs.write("index", null, function(){
+                    setup_app();
+                });
+            }
+
+            function reload_page(){
+                document.getElementById("state").innerHTML = "Reloading...";
+                location.reload();
             }
 
             function setup_app(){
@@ -682,8 +734,9 @@
                     }
                     //bad password
                     else if(pxhr.statusText === "401 Unauthorized"){
-                        alert("Couldn't decrypt with that password :(")
-                        app_init();
+                        document.getElementById("state").innerHTML = "Couldn't decrypt with that password :( <a href='#' id='reload-page'>Try again</a> or <a href='#' id='reset-everything'>Reset everything</a>.";
+                        document.getElementById("reload-page").addEventListener("click", reload_page);
+                        document.getElementById("reset-everything").addEventListener("click", reset_index);
                     }
                     //some other error occurred
                     else if(pxhr.statusText !== "200 OK"){
