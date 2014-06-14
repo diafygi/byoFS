@@ -4,7 +4,6 @@
         <title>Bring Your Own Data - My Diary</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <script src="../../byoFS.min.js"></script>
-        <script src="zepto.min.js"></script>
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
             html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
@@ -50,13 +49,26 @@
                 <p id="add-submitting">Submitting...</p>
             </div>
             <div id="list"></div>
+            <div id="entry-template" style="display:none;">
+                <div class="entry-id">
+                    <p>
+                        <span class="entry-title"></span>
+                        <a href="#" class="entry-toggle">[+]</a>
+                    </p>
+                    <div class="entry-area" style="display:none;">
+                        <div class="entry-text-wrapper">
+                            <div class="entry-text"></div>
+                        </div>
+                        <input type="hidden" class="entry-raw">
+                        <a href="#" class="entry-edit">Edit</a>
+                        <a href="#" class="entry-del">Delete</a>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!--App code goes here-->
         <script>
-            var template = {
-                entry: '<div class="entry-id"><p><span class="entry-title"></span> <a href="#" class="entry-toggle">[+]</a></p><div class="entry-area" style="display:none;"><div class="entry-text-wrapper"><div class="entry-text"></div></div><input type="hidden" class="entry-raw"><a href="#" class="entry-edit">Edit</a> <a href="#" class="entry-del">Delete</a></div></div>'
-            }
             var message = {
                 init: "To get started, load your diary from Dropbox or localStorage!",
                 reg1: "Creating diary...",
@@ -77,124 +89,150 @@
                 return str;
             }
 
-            function show_addform(id, text){
-                $("#add-title").text(id ? "Editing entry from " + ts_to_str(id) : "New Entry");
-                $("#add-id").val(id ? id : "");
-                $("#add-text").val(text ? text : "");
-                $("#add-toggle").hide();
-                $("#add-submit").show();
-                $("#add-submitting").hide();
-                $("#add-form").show();
-                $("#add-back").off("click");
-                $("#add-back").one("click", function(e){
-                    e.preventDefault();
-                    hide_addform();
-                });
-                //submit or update entry
-                $("#add-submit").off("click");
-                $("#add-submit").one("click", function(e){
-                    e.preventDefault();
-                    $("#add-submit").hide();
-                    $("#add-submitting").show();
-                    //update entry
-                    if($("#add-id").val()){
-                        fs.write("entry"+id, $("#add-text").val(), function(){
-                            setup_app('update');
+            function submit_addform(e){
+                e.preventDefault();
+                document.getElementById("add-submit").style.display = "none";
+                document.getElementById("add-submitting").style.display = "block";
+                //update entry
+                var add_txt = document.getElementById("add-text").value;
+                var id = document.getElementById("add-id").value;
+                if(id !== ""){
+                    fs.write("entry"+id, add_txt, function(){
+                        setup_app('update');
+                    });
+                }
+                //new entry
+                else{
+                    //id format: YYYY-MM-DD_HH:MM:SS
+                    var new_id = new Date().getTime();
+                    fs.write("entry"+new_id, add_txt, function(){
+                        ids.unshift(new_id);
+                        fs.write("index", JSON.stringify(ids), function(){
+                            setup_app('add');
                         });
-                    }
-                    //new entry
-                    else{
-                        //id format: YYYY-MM-DD_HH:MM:SS
-                        var new_id = new Date().getTime();
-                        fs.write("entry"+new_id, $("#add-text").val(), function(){
-                            ids.unshift(new_id);
-                            fs.write("index", JSON.stringify(ids), function(){
-                                setup_app('add');
-                            });
-                        });
-                    }
-                });
+                    });
+                }
             }
 
-            function hide_addform(){
-                $("#add-form").hide();
-                $("#add-toggle").show();
-                $("#add-toggle").off("click");
-                $("#add-toggle").one("click", function(e){
+            function show_addform(e, id, text){
+                if(e !== undefined){
                     e.preventDefault();
-                    show_addform();
-                });
+                }
+
+                //update fields
+                document.getElementById("add-title").innerHTML = id ? "Editing entry from " + ts_to_str(id) : "New Entry";
+                document.getElementById("add-id").value = id ? id : "";
+                document.getElementById("add-text").value = text ? text : "";
+
+                //show form
+                document.getElementById("add-toggle").style.display = "none";
+                document.getElementById("add-submit").style.display = "inline-block";
+                document.getElementById("add-submitting").style.display = "none";
+                document.getElementById("add-form").style.display = "block";
+
+                //add event listeners
+                document.getElementById("add-back").addEventListener("click", hide_addform);
+                document.getElementById("add-submit").addEventListener("click", submit_addform);
+            }
+
+            function hide_addform(e){
+                if(e !== undefined){
+                    e.preventDefault();
+                }
+                //revert to hidden form
+                document.getElementById("add-form").style.display = "none";
+                document.getElementById("add-toggle").style.display = "inline-block";
+                document.getElementById("add-toggle").addEventListener("click", show_addform);
+            }
+
+            function toggle_entry(e){
+                e.preventDefault();
+                var entry = e.target.parentNode.parentNode;
+                var id = entry.id;
+                var toggle = entry.querySelector(".entry-toggle");
+                var raw = entry.querySelector(".entry-raw");
+                var txt = entry.querySelector(".entry-text");
+                var area = entry.querySelector(".entry-area");
+                if(toggle.innerHTML === "[+]"){
+                    if(raw.value === ""){
+                        txt.innerHTML = "Loading...";
+                        fs.read("entry"+id, function(pxhr){
+                            var data = pxhr.responseText;
+                            if(pxhr.statusText === "404 Not Found")
+                                data = "";
+                            //TODO: mitigate XSS
+                            raw.value = data;
+                            txt.innerHTML = data.replace(/\n/g, '<br>');
+                        });
+                    }
+                    area.style.display = "block";
+                    toggle.innerHTML = "[-]";
+                }
+                else{
+                    area.style.display = "none";
+                    toggle.innerHTML = "[+]";
+                }
+            }
+
+            function edit_entry(e){
+                e.preventDefault();
+                var entry = e.target.parentNode.parentNode
+                var id = entry.id;
+                show_addform(undefined, id, entry.querySelector(".entry-raw").value);
+                window.scrollTo(0, document.getElementById("add-form").offsetTop - 10);
+            }
+
+            function del_entry(e){
+                e.preventDefault();
+                var id = e.target.parentNode.parentNode.id;
+                if(confirm("Are you sure you want to delete this entry?")){
+                    ids.splice(ids.indexOf(parseInt(id)), 1);
+                    fs.write("index", JSON.stringify(ids), function(){
+                        fs.write("entry"+id, null, function(){
+                            setup_app('del');
+                        });
+                    });
+                }
             }
 
             function load_entries(){
                 hide_addform();
                 //blank state for no entries
                 if(!ids.length){
-                    $("#message").html(message['empty']);
-                    $("#list").html("");
+                    document.getElementById("message").innerHTML = message['empty'];
+                    document.getElementById("list").innerHTML = "";
                 }
                 //show list of entries and display the top one
                 else{
-                    $("#list").html("");
+                    document.getElementById("list").innerHTML = "";
                     for(var i = 0; i < ids.length; i++){
-                        $("#list").append(template['entry']);
-                        $("#list").children().last().attr("id", ids[i]);
-                        $("#"+ids[i]).find(".entry-title").text(ts_to_str(ids[i]));
+                        //append entry
+                        var template = document.getElementById("entry-template").children[0].cloneNode(true);
+                        document.getElementById("list").appendChild(template);
+
+                        //update entry contents
+                        var entries = document.getElementById("list").children;
+                        var last = entries[entries.length - 1];
+                        last.id = ids[i];
+                        last.querySelector(".entry-title").innerHTML = ts_to_str(ids[i]);
+
+                        //event binders for entry expand/collapse/edit/delete
+                        last.querySelector(".entry-toggle").addEventListener("click", toggle_entry);
+                        last.querySelector(".entry-edit").addEventListener("click", edit_entry);
+                        last.querySelector(".entry-del").addEventListener("click", del_entry);
                     }
-                    //event binders for entry expand/collapse/edit/delete
-                    $(".entry-toggle").off("click");
-                    $(".entry-toggle").on("click", function(e){
-                        var id = $(e.target).parents(".entry-id").attr("id");
-                        if($("#"+id).find(".entry-toggle").text() == "[+]"){
-                            if($("#"+id).find(".entry-raw").val() == ""){
-                                $("#"+id).find(".entry-text").text("Loading...");
-                                fs.read("entry"+id, function(pxhr){
-                                    var data = pxhr.responseText;
-                                    if(pxhr.statusText === "404 Not Found")
-                                        data = "";
-                                    $("#"+id).find(".entry-raw").val(data);
-                                    $("#"+id).find(".entry-text").html(data.replace(/\n/g, '<br>'));
-                                });
-                            }
-                            $("#"+id).find(".entry-area").show();
-                            $("#"+id).find(".entry-toggle").text("[-]");
-                        }
-                        else{
-                            $("#"+id).find(".entry-area").hide();
-                            $("#"+id).find(".entry-toggle").text("[+]");
-                        }
-                    });
-                    $(".entry-edit").off("click");
-                    $(".entry-edit").on("click", function(e){
-                        var id = $(e.target).parents(".entry-id").attr("id");
-                        show_addform(id, $("#"+id).find(".entry-raw").val());
-                        window.scrollTo(0, $("#add-form").offset().top - 10);
-                    });
-                    $(".entry-del").off("click");
-                    $(".entry-del").on("click", function(e){
-                        e.preventDefault();
-                        var id = $(e.target).parents(".entry-id").attr("id");
-                        if(confirm("Are you sure you want to delete this entry?")){
-                            ids.splice(ids.indexOf(parseInt(id)), 1);
-                            fs.write("index", JSON.stringify(ids), function(){
-                                fs.write("entry"+id, null, function(){
-                                    setup_app('del');
-                                });
-                            });
-                        }
-                    });
                 }
             }
 
             function setup_app(msg_key){
-                $("#message").html(message['load']);
+                document.getElementById("message").innerHTML = message['load'];
                 //see if the index exists
                 fs.read("index", function(pxhr){
                     //no index, assume registration and create index file
                     if(pxhr.statusText === "404 Not Found"){
-                        $("#message").html(message['reg1']);
+                        document.getElementById("message").innerHTML = message['reg1'];
                         fs.write("index", JSON.stringify([]), function(){
-                            $("#message").html(message['reg2']);
+                            document.getElementById("message").innerHTML = message['reg2'];
                             setup_app();
                         });
                         return;
@@ -212,10 +250,10 @@
                     //index found
                     else{
                         if(msg_key)
-                            $("#message").html(message[msg_key])
+                            document.getElementById("message").innerHTML = message[msg_key];
                         else
-                            $("#message").html("");
-                        ids = $.parseJSON(pxhr.responseText);
+                            document.getElementById("message").innerHTML = "";
+                        ids = JSON.parse(pxhr.responseText);
                         load_entries();
                     }
                 });
@@ -223,7 +261,7 @@
 
             //initialize app
             function app_init(){
-                $("#message").html(message['init'])
+                document.getElementById("message").innerHTML = message['init'];
                 byoFS("mydiary", "#widget", function(connected_fs){
                     fs = connected_fs;
                     setup_app();
