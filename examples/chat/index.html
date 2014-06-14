@@ -18,8 +18,9 @@
             /*App CSS goes here*/
             #widget{float:right;}
             body{font-family:sans-serif;background-color:#f3f3f3;color:#333333;height:100%;}
-            #modal-wrapper{position:absolute;background-color:#ffffff;opacity:0.9;height:100%;width:100%;text-align:center;z-index:99;}
-            #modal{display:inline-block;background-color:#dddddd;padding:10px;margin-top:50px;width:420px;opacity:1;border-radius:5px;}
+            #modal-background{position:absolute;background-color:#ffffff;opacity:0.9;height:100%;width:100%;text-align:center;z-index:98;}
+            #modal-wrapper{position:absolute;width:100%;text-align:center;opacity:0.9;z-index:99;}
+            #modal{display:inline-block;background-color:#dddddd;padding:10px;margin-top:50px;width:420px;opacity:1.0;border-radius:5px;}
             #modal-X{float:right;text-decoration:none;color:#999999;font-size:15px;}
             #modal-title{padding:10px 0px;}
             #modal-txt{width:400px;height:150px;}
@@ -51,6 +52,7 @@
     </head>
     <body>
         <!--HTML Goes Here-->
+        <div id="modal-background" style="display:none;"></div>
         <div id="modal-wrapper" style="display:none;">
             <div id="modal">
                 <a href="#" id="modal-X">X</a>
@@ -68,7 +70,7 @@
                     <li><a id="gen_code" href="#">Create a new chat code</a></li>
                     <li><a id="get_code" href="#">Received a chat code?</a></li>
                 </ul>
-                <div id="saved">
+                <div id="saved" style="display:none;">
                     <select id="saved-list">
                         <option value="blank_state" selected>Previously Saved Chats</option>
                         <option value="load_123456">Chat 123456</li>
@@ -149,7 +151,6 @@
             var WAIT = null;
             var MONITOR_ID;
             var MONITOR = null;
-            var FAILED = 0;
             var MODAL_FN = null;
             /*
             index = {
@@ -214,11 +215,13 @@
                 if(e !== undefined){
                     e.preventDefault();
                 }
+                document.getElementById("modal-background").style.display = "none";
                 document.getElementById("modal-wrapper").style.display = "none";
             }
 
             //show modal for copying/pasting codes
             function show_modal(title, txt, submit_txt, callback){
+                document.getElementById("modal-background").style.display = "block";
                 document.getElementById("modal-wrapper").style.display = "block";
 
                 document.getElementById("modal-title").innerHTML = title;
