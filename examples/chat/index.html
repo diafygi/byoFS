@@ -255,7 +255,8 @@
                         code = e.target.title;
                     }
                 }
-                show_modal("Copy the below code and send it to the person you want to chat with.", code, "Close", undefined);
+                var share_url = document.location.href.split("?")[0] + "?" + code;
+                show_modal("Copy the below code or <a target='_blank' href='" + share_url + "'>this link</a> and send it to the person you want to chat with.", code, "Close", undefined);
             }
 
             //search current index for public key reference
@@ -538,8 +539,20 @@
                     return;
                 close_chat();
 
+                //remove the url if the code contains a url
+                if(conf.split("?").length > 1){
+                    conf = conf.split("?")[1];
+                }
+
                 //convert chat code to chat config
-                conf = JSON.parse(window.atob(conf));
+                try{
+                    conf = JSON.parse(window.atob(conf));
+                }
+                catch(err){
+                    document.getElementById("state").innerHTML = "The code supplied doesn't seem to work :( <a href='#' id='get-input-code'>Try another code</a>";
+                    document.getElementById("get-input-code").addEventListener("click", input_code);
+                    return;
+                }
 
                 //retrieve public key
                 document.getElementById("state").innerHTML = "Retrieving their public key...";
@@ -593,6 +606,7 @@
                                                 }));
                                                 document.getElementById("state").innerHTML = 'Chat created! Reply with this new <a id="new_b64_code" href="#" title="'+b64_code+'">chat code</a>.';
                                                 document.getElementById("new_b64_code").addEventListener("click", show_code);
+                                                show_code(undefined, b64_code);
                                                 wait_chat(new_id);
                                             });
                                         });
@@ -712,10 +726,19 @@
                 document.getElementById("state").innerHTML = "Ready to rock and roll!";
 
                 //hide chat window if no chat selected
-                if(chat_id === undefined)
+                if(chat_id === undefined){
                     document.getElementById("content").style.display = "none";
-                else
+
+                    //see if there's a config in the url
+                    var url_conf = document.location.search.substr(1);
+                    if(url_conf !== ""){
+                        document.getElementById("modal-txt").value = url_conf;
+                        get_code();
+                    }
+                }
+                else{
                     init_chat(chat_id);
+                }
             }
 
             function reset_index(){
