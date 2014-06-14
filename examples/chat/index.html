@@ -248,9 +248,14 @@
             }
 
             //show a popup of the code
-            function show_code(e){
-                e.preventDefault();
-                show_modal("Copy the below code and send it to the person you want to chat with.", e.target.title, "Close", undefined);
+            function show_code(e, code){
+                if(e !== undefined){
+                    e.preventDefault();
+                    if(code === undefined){
+                        code = e.target.title;
+                    }
+                }
+                show_modal("Copy the below code and send it to the person you want to chat with.", code, "Close", undefined);
             }
 
             //search current index for public key reference
@@ -494,7 +499,7 @@
 
                             //generate placeholder log file
                             document.getElementById("state").innerHTML = "Chat created! Updating index...";
-                            fs.write("index", JSON.stringify(index), function(){
+                            update_index(function(){
                                 //if there was a callback, call that
                                 if(callback !== undefined){
                                     callback(id);
@@ -508,6 +513,7 @@
                                     }));
                                     document.getElementById("state").innerHTML = 'Here is your <a id="new_b64_code" href="#" title="'+b64_code+'">chat code</a>.';
                                     document.getElementById("new_b64_code").addEventListener("click", show_code);
+                                    show_code(undefined, b64_code);
                                 }
                             });
                         });
@@ -577,7 +583,7 @@
                                                 "key_url": conf['key'],
                                                 "log_url": conf['log'],
                                             };
-                                            fs.write("index", JSON.stringify(index), function(){
+                                            update_index(function(){
                                                 //show message with response code
                                                 var b64_code = window.btoa(JSON.stringify({
                                                     "ref": index[new_id]['remote']['pub_url'],
@@ -652,7 +658,7 @@
                                                                     //update index
                                                                     document.getElementById("state").innerHTML = "Updating index with re-encryption...";
                                                                     index[cur_id]['local']['key'] = remote_shared;
-                                                                    fs.write("index", JSON.stringify(index), function(){
+                                                                    update_index(function(){
                                                                         document.getElementById("state").innerHTML = "Re-encrypted chat ready!";
                                                                         init_chat(cur_id);
                                                                     });
@@ -674,7 +680,7 @@
                                                         //update index
                                                         document.getElementById("state").innerHTML = "Updating index with new chat...";
                                                         index[cur_id]['local']['key'] = remote_shared;
-                                                        fs.write("index", JSON.stringify(index), function(){
+                                                        update_index(function(){
                                                             document.getElementById("state").innerHTML = "New chat ready!";
                                                             init_chat(cur_id);
                                                         });
@@ -715,7 +721,7 @@
             function reset_index(){
                 document.getElementById("state").innerHTML = "Resetting...";
                 fs.write("index", null, function(){
-                    setup_app();
+                    update_index(load_data);
                 });
             }
 
@@ -724,15 +730,14 @@
                 location.reload();
             }
 
-            function setup_app(){
-                document.getElementById("state").innerHTML = "Setting up...";
-                //see if the index exists
+            function update_index(callback){
+                //see if you can get the index
                 fs.read("index", function(pxhr){
                     //no index, assume registration and create index file
                     if(pxhr.statusText === "404 Not Found"){
                         document.getElementById("state").innerHTML = "No index found, creating one...";
                         fs.write("index", JSON.stringify({}), function(){
-                            setup_app();
+                            update_index(callback);
                         });
                     }
                     //bad password
@@ -748,10 +753,47 @@
                     }
                     //index found
                     else{
-                        //load chat history
+                        //compare local vs remote index
                         document.getElementById("state").innerHTML = "Parsing index...";
-                        index = JSON.parse(pxhr.responseText);
-                        load_data();
+                        var remote_index = JSON.parse(pxhr.responseText);
+                        var needs_update = false;
+
+                        //three layers of keys to compare
+                        //(chat_id, local/remote, and local/remote keys)
+                        for(var k1 in index){
+                            //see if any new chat ids
+                            if(remote_index[k1] === undefined){
+                                needs_update = true;
+                                remote_index[k1] = index[k1];
+                                continue;
+                            }
+                            for(var k2 in index[k1]){
+                                //see if any new local/remote
+                                if(remote_index[k1][k2] === undefined){
+                                    needs_update = true;
+                                    remote_index[k1][k2] = index[k1][k2];
+                                    continue;
+                                }
+                                for(var k3 in index[k1][k2]){
+                                    //see if any new keys in each local/remote
+                                    if(remote_index[k1][k2][k3] !== index[k1][k2][k3]){
+                                        needs_update = true;
+                                        remote_index[k1][k2][k3] = index[k1][k2][k3];
+                                    }
+                                }
+                            }
+                        }
+                        index = remote_index;
+
+                        //update index if needed
+                        if(needs_update){
+                            fs.write("index", JSON.stringify(index), function(){
+                                callback();
+                            });
+                        }
+                        else{
+                            callback();
+                        }
                     }
                 });
             }
@@ -762,7 +804,8 @@
                 document.getElementById("content").style.display = "none";
                 byoFS("byoChat", "#widget", function(connected_fs){
                     fs = connected_fs;
-                    setup_app();
+                    document.getElementById("state").innerHTML = "Setting up...";
+                    update_index(load_data);
                 });
             }
             app_init();
