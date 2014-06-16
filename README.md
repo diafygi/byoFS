@@ -139,10 +139,10 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 
 ## Examples
 
-**NOTE: github.io does not support https. Please only use these apps as examples, and do not use any real passwords in the apps (since the app code is served over http).**
+**NOTE: Please only use these apps as proof-of-concept examples.**
 
-* [Diary](http://diafygi.github.io/byoFS/examples/diary/) - a simple diary app
-* [Chat](http://diafygi.github.io/byoFS/examples/chat/) - a simple chat app
+* [Diary](https://diafygi.github.io/byoFS/examples/diary/) - a simple diary app
+* [Chat](https://diafygi.github.io/byoFS/examples/chat/) - a simple chat app
 
 ## Support
 
