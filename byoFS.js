@@ -95,7 +95,7 @@ var byoFS = (function(){
         document.querySelector(target).querySelector(".byoFS-auth-db").addEventListener("click", function(e){
             e.preventDefault();
             //open dropbox oauth window
-            window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=9xzbrduyt7rznbw", "_blank");
+            window.open("https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=wy1ojs3oijr3gpt", "_blank");
 
             //insert dropbox token/decrypt form and behavior
             document.querySelector(target).innerHTML = templates['db'];
@@ -110,8 +110,8 @@ var byoFS = (function(){
                 //build oauth token parameter
                 var params = "code=" + encodeURIComponent(e.target.parentElement.parentElement.querySelector(".byoFS-db-code").value);
                 params += "&grant_type=authorization_code";
-                params += "&client_id=9xzbrduyt7rznbw"; //"byoFS" drobox app
-                params += "&client_secret=g7jnj93mqluqazh";
+                params += "&client_id=wy1ojs3oijr3gpt"; //"byoFS" drobox app
+                params += "&client_secret=jorqnsz6kd25ieo";
 
                 //take submitted code and get a oauth token
                 var xhr_t = new XMLHttpRequest();
