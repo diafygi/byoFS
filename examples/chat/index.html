@@ -26,7 +26,8 @@
             #modal-txt{width:400px;height:150px;}
             #modal-close{padding:5px;border:0;border-radius:0;background-color:#333333;color:#f3f3f3;width:90px;}
             #header{z-index:2;display:block;position:absolute;left:0px;top:0px;width:calc(100% - 20px);padding:10px;}
-            #header h1{height:20px;overflow:hidden;font-size:18px;font-weight:bold;}
+            #desc{display:inline-block;text-decoration:none;border-bottom: 1px dashed #333333;color:#333333;}
+            #header h1{height:24px;overflow:hidden;font-size:18px;font-weight:bold;}
             #state{height:16px;overflow:hidden;font-size:14px;font-style:italic;}
             #settings-row{height:40px;overflow:hidden;}
             #setup{display:inline-block;margin-top:15px;}
@@ -63,13 +64,17 @@
         </div>
         <div id="header">
             <div id="widget"></div>
-            <h1>Bring Your Own Chat (an example <a href="https://github.com/diafygi/byoFS" target="_blank">byoFS</a> app)</h1>
+            <h1>
+                <a href="#" id="desc" title="description">Bring Your Own Chat</a>
+                (an example <a href="https://github.com/diafygi/byoFS" target="_blank">byoFS</a> app)
+            </h1>
             <div id="state"></div>
             <div id="settings-row">
                 <ul id="setup">
                     <li><a id="gen_code" href="#">Create a new chat code</a></li>
                     <li><a id="get_code" href="#">Received a chat code?</a></li>
                 </ul>
+                <!--TODO: Implement saved chats-->
                 <div id="saved" style="display:none;">
                     <select id="saved-list">
                         <option value="blank_state" selected>Previously Saved Chats</option>
@@ -141,9 +146,8 @@
         <!--App code goes here-->
         <script>
             //global settings
-            var BITS = 512;
+            var BITS = 512; //TODO: make this 2048 or 4096 bits in a worker thread
             var fs;
-            var index = {};
             var local_cache = {};
             var remote_cache = {};
             var CHECK_INTERVAL = 2000;
@@ -152,8 +156,9 @@
             var MONITOR_ID;
             var MONITOR = null;
             var MODAL_FN = null;
+            var index = {};
             /*
-            index = {
+            index format = {
                 "<chat_id>": {
                     "local": {
                         "pub": <local_public_key_string>,
@@ -255,7 +260,9 @@
                         code = e.target.title;
                     }
                 }
-                var share_url = document.location.href.split("?")[0] + "?" + code;
+                var base_url = document.location.href.split("?")[0];
+                var base_noanchors = base_url.split("#")[0];
+                var share_url = base_noanchors + "?" + code;
                 show_modal("Copy the below code or <a target='_blank' href='" + share_url + "'>this link</a> and send it to the person you want to chat with.", code, "Close", undefined);
             }
 
@@ -741,14 +748,16 @@
                 }
             }
 
-            function reset_index(){
+            function reset_index(e){
+                e.preventDefault();
                 document.getElementById("state").innerHTML = "Resetting...";
                 fs.write("index", null, function(){
                     update_index(load_data);
                 });
             }
 
-            function reload_page(){
+            function reload_page(e){
+                e.preventDefault();
                 document.getElementById("state").innerHTML = "Reloading...";
                 location.reload();
             }
@@ -832,6 +841,20 @@
                 });
             }
             app_init();
+
+
+            function show_description(e){
+                e.preventDefault();
+                show_modal("Description", "This is an example zero-knowledge, " +
+                    "end-to-end encrypted chat that doesn't rely on any plugins. " +
+                    "This is a static unhosted app (i.e. you can right-click and " +
+                    "Save-As) that uses your Dropbox account as an encrypted " +
+                    "storage backend so it can be served anywhere. NOTE: This is a " +
+                    "proof-of-concept for the the byoFS project, and should only " +
+                    "be used as an example. See https://github.com/diafygi/byoFS " +
+                    "for more details.", "Close", undefined);
+            }
+            document.getElementById("desc").addEventListener("click", show_description);
         </script>
     </body>
 </html>
