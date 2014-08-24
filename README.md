@@ -142,7 +142,7 @@ There are only three functions in this library. `byoFS()` sets up the widget, `f
 **NOTE: Please only use these apps as proof-of-concept examples.**
 
 * [Diary](https://diafygi.github.io/byoFS/examples/diary/) - a simple diary app
-* [Chat](https://diafygi.github.io/byoFS/examples/chat/) - a simple chat app
+* [Chat](https://diafygi.github.io/byoFS/examples/chat/) - a simple chat app (*[original presentation video](https://www.youtube.com/watch?v=WTPimUSIWbI)*)
 
 ## Support
 
