@@ -4,6 +4,7 @@
         <title>Bring Your Own Data - My Diary</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <script src="../../byoFS.js"></script>
+        <script src="../../byoFS-ui.js"></script>
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
             html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small,
@@ -159,7 +160,7 @@
                         txt.innerHTML = "Loading...";
                         fs.read("entry"+id, function(pxhr){
                             var data = pxhr.responseText;
-                            if(pxhr.statusText === "404 Not Found")
+                            if(pxhr.status === 404)
                                 data = "";
                             //TODO: mitigate XSS
                             raw.value = data;
@@ -244,7 +245,7 @@
                 //see if the index exists
                 fs.read("index", function(pxhr){
                     //no index, assume registration and create index file
-                    if(pxhr.statusText === "404 Not Found"){
+                    if(pxhr.status === 404){
                         document.getElementById("message").innerHTML = message['reg1'];
                         fs.write("index", JSON.stringify([]), function(){
                             document.getElementById("message").innerHTML = message['reg2'];
@@ -253,13 +254,14 @@
                         return;
                     }
                     //bad password
-                    else if(pxhr.statusText === "401 Unauthorized"){
+                    else if(pxhr.status === 401){
                         document.getElementById("message").innerHTML = "Couldn't decrypt with that password :( <a href='#' id='reload-page'>Try again</a> or <a href='#' id='reset-everything'>Reset everything</a>.";
                         document.getElementById("reload-page").addEventListener("click", reload_page);
                         document.getElementById("reset-everything").addEventListener("click", reset_index);
                     }
                     //some other error occurred
-                    else if(pxhr.statusText !== "200 OK"){
+                    else if(pxhr.status !== 200){
+                        console.log(pxhr);
                         alert("Something went wrong :(")
                         app_init();
                     }
@@ -278,7 +280,7 @@
             //initialize app
             function app_init(){
                 document.getElementById("message").innerHTML = message['init'];
-                byoFS("mydiary", "#widget", function(connected_fs){
+                byoFS_UI("mydiary", "#widget", function(connected_fs){
                     fs = connected_fs;
                     setup_app();
                 });
@@ -288,7 +290,7 @@
         <script>
             /*
             //debug test
-            byoFS("mydiary", "#widget", function(fs){
+            byoFS_UI("mydiary", "#widget", function(fs){
                 console.log("connected!");
                 fs.write("testfile", "testdata", function(pxhr){
                     console.log("write callback!");

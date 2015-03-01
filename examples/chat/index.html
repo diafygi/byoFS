@@ -4,6 +4,7 @@
         <title>Bring Your Own Chat - Proof of Concept</title>
         <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
         <script src="../../byoFS.js"></script>
+        <script src="../../byoFS-ui.js"></script>
         <script src="rsa.min.js"></script>
         <style>
             /*http://meyerweb.com/eric/tools/css/reset/ v2.0 | 20110126 License: none (public domain)*/
@@ -766,20 +767,20 @@
                 //see if you can get the index
                 fs.read("index", function(pxhr){
                     //no index, assume registration and create index file
-                    if(pxhr.statusText === "404 Not Found"){
+                    if(pxhr.status === 404){
                         document.getElementById("state").innerHTML = "No index found, creating one...";
                         fs.write("index", JSON.stringify({}), function(){
                             update_index(callback);
                         });
                     }
                     //bad password
-                    else if(pxhr.statusText === "401 Unauthorized"){
+                    else if(pxhr.status === 401){
                         document.getElementById("state").innerHTML = "Couldn't decrypt with that password :( <a href='#' id='reload-page'>Try again</a> or <a href='#' id='reset-everything'>Reset everything</a>.";
                         document.getElementById("reload-page").addEventListener("click", reload_page);
                         document.getElementById("reset-everything").addEventListener("click", reset_index);
                     }
                     //some other error occurred
-                    else if(pxhr.statusText !== "200 OK"){
+                    else if(pxhr.status !== 200){
                         alert("Something went wrong :(")
                         app_init();
                     }
@@ -834,7 +835,7 @@
                 document.getElementById("state").innerHTML = "Click the Dropbox icon to connect! --->";
                 document.getElementById("settings-row").style.display = "none";
                 document.getElementById("content").style.display = "none";
-                byoFS("byoChat", "#widget", function(connected_fs){
+                byoFS_UI("byoChat", "#widget", function(connected_fs){
                     fs = connected_fs;
                     document.getElementById("state").innerHTML = "Setting up...";
                     update_index(load_data);
