@@ -10,19 +10,34 @@
      ***********************************
      ***********************************/
 
-    //convert a string to a Unit16Array
-    function str2bytes(str){
-        var buf = new ArrayBuffer(str.length * 2);
-        var bytes = new Uint16Array(buf);
+    //convert a string to ArrayBuffer
+    function str2bytes(str, encoding){
+        //manual utf-8 override
+        if(encoding === "utf-8"){
+            var buf = new ArrayBuffer(str.length);
+            var bytes = new Uint8Array(buf);
+        }
+        //default encoding is utf-16 in javascript
+        else{
+            var buf = new ArrayBuffer(str.length * 2);
+            var bytes = new Uint16Array(buf);
+        }
         for(var i = 0; i < str.length; i++){
             bytes[i] = str.charCodeAt(i);
         }
-        return bytes;
+        return bytes.buffer;
     }
 
     //convert an ArrayBuffer to a string
-    function bytes2str(buf){
-        return String.fromCharCode.apply(null, new Uint16Array(buf));
+    function bytes2str(buf, encoding){
+        //manual utf-8 override
+        if(encoding === "utf-8"){
+            return String.fromCharCode.apply(null, new Uint8Array(buf));
+        }
+        //default encoding is utf-16 in javascript
+        else{
+            return String.fromCharCode.apply(null, new Uint16Array(buf));
+        }
     }
 
     //convert an ArrayBuffer to a hex string
@@ -118,8 +133,9 @@
         }
 
         //raise error if no code in Dropbox
-        if(["dropbox"].indexOf(settings.remote) !== -1 && settings.code === undefined){
-            throw Error(settings.remote + " requires a 'code' field.");
+        if(["dropbox"].indexOf(settings.remote) !== -1
+          && settings.code === undefined && settings.token === undefined){
+            throw Error(settings.remote + " requires a 'code' or 'token' field.");
         }
 
         /********************
@@ -142,7 +158,7 @@
                 else{
                     return {
                         "status": 200,
-                        "response": str2bytes(context.localStorage[remoteFilename]),
+                        "responseText": str2bytes(context.localStorage[remoteFilename]),
                     };
                 }
             },
@@ -178,60 +194,74 @@
          ***************
          ***************/
 
-         //"byoFS" drobox app
+        //NOTE: This is an unhosted library, and the secret for this app is
+        //understood to be public so there are no server-side requirements.
         var dropbox_client_id = "wy1ojs3oijr3gpt";
         var dropbox_client_secret = "jorqnsz6kd25ieo";
 
+        //convert an oauth code to an access_token
+        function _dropbox_auth(){
+            return new Promise(function(resolve, reject){
+
+                //access_token not set yet
+                if(settings.token === undefined){
+
+                    //build OAuth token request body
+                    var params = "code=" + encodeURIComponent(settings.code);
+                    params += "&grant_type=authorization_code";
+                    params += "&client_id=" + dropbox_client_id;
+                    params += "&client_secret=" + dropbox_client_secret;
+
+                    //take submitted code and get a oauth token
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("POST", "https://api.dropbox.com/1/oauth2/token");
+                    xhr.onreadystatechange = function(){
+                        if(xhr.readyState === 4){
+                            if(xhr.status === 200){
+                                settings.token = JSON.parse(xhr.responseText)['access_token'];
+                                resolve();
+                            }
+                            else{
+                                var err = Error();
+                                err.xhr = xhr;
+                                reject(err);
+                            }
+                        }
+                    };
+                    xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
+                    xhr.send(params);
+                }
+
+                //access_token is set
+                else{
+                    resolve();
+                }
+            });
+        }
+
         remotes.dropbox = {
 
-            //read a file from localStorage
+            //read a file from Dropbox
             "read": function(remoteFilename){
 
                 //get an auth token if not is set yet
-                return new Promise(function(resolve, reject){
-                    if(settings.token === undefined){
-
-                        //build oauth token parameter
-                        var params = "code=" + encodeURIComponent(settings.code);
-                        params += "&grant_type=authorization_code";
-                        params += "&client_id=" + dropbox_client_id;
-                        params += "&client_secret=" + dropbox_client_secret;
-
-                        //take submitted code and get a oauth token
-                        var xhr = new XMLHttpRequest();
-                        xhr.open("POST", "https://api.dropbox.com/1/oauth2/token");
-                        xhr.onreadystatechange = function(){
-                            if(xhr.readyState === 4){
-                                if(xhr.status === 200){
-                                    settings.token = JSON.parse(xhr.responseText)['access_token'];
-                                    resolve();
-                                }
-                                else{
-                                    var err = Error();
-                                    err.xhr = xhr;
-                                    reject(err);
-                                }
-                            }
-                        };
-                        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
-                        xhr.send(params);
-                    }
-                    else{
-                        resolve();
-                    }
-                })
+                return _dropbox_auth()
 
                 //request the file
                 .then(function(){
                     return new Promise(function(resolve, reject){
                         var xhr = new XMLHttpRequest();
                         xhr.open("GET", "https://api-content.dropbox.com/1/files/sandbox/" +
-                            encodeURIComponent(remoteFilename) + ".txt");
+                            encodeURIComponent(remoteFilename) + ".byofs");
                         xhr.responseType = "arraybuffer";
                         xhr.onreadystatechange = function(){
                             if(xhr.readyState === 4){
                                 if(xhr.status === 200){
-                                    resolve(xhr);
+                                    resolve({
+                                        "status": 200,
+                                        "responseText": xhr.response,
+                                        "xhr": xhr,
+                                    });
                                 }
                                 else{
                                     var err = Error();
@@ -246,42 +276,11 @@
                 })
             },
 
-            //write a file to localStorage
+            //write a file to Dropbox
             "write": function(remoteFilename, data, isPublic){
 
                 //get an auth token if not is set yet
-                return new Promise(function(resolve, reject){
-                    if(settings.token === undefined){
-
-                        //build oauth token parameter
-                        var params = "code=" + encodeURIComponent(settings.code);
-                        params += "&grant_type=authorization_code";
-                        params += "&client_id=" + dropbox_client_id;
-                        params += "&client_secret=" + dropbox_client_secret;
-
-                        //take submitted code and get a oauth token
-                        var xhr = new XMLHttpRequest();
-                        xhr.open("POST", "https://api.dropbox.com/1/oauth2/token");
-                        xhr.onreadystatechange = function(){
-                            if(xhr.readyState === 4){
-                                if(xhr.status === 200){
-                                    settings.token = JSON.parse(xhr.responseText)['access_token'];
-                                    resolve();
-                                }
-                                else{
-                                    var err = Error();
-                                    err.xhr = xhr;
-                                    reject(err);
-                                }
-                            }
-                        };
-                        xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded")
-                        xhr.send(params);
-                    }
-                    else{
-                        resolve();
-                    }
-                })
+                return _dropbox_auth()
 
                 //write or delete the file
                 .then(function(){
@@ -291,7 +290,7 @@
                         return new Promise(function(resolve, reject){
                             var xhr = new XMLHttpRequest();
                             xhr.open("POST", "https://api.dropbox.com/1/fileops/delete?root=sandbox&path=" +
-                                encodeURIComponent(remoteFilename) + ".txt");
+                                encodeURIComponent(remoteFilename) + ".byofs");
                             xhr.onreadystatechange = function(){
                                 if(xhr.readyState === 4){
                                     if(xhr.status === 200){
@@ -314,7 +313,7 @@
                         return new Promise(function(resolve, reject){
                             var xhr = new XMLHttpRequest();
                             xhr.open("POST", "https://api-content.dropbox.com/1/files_put/sandbox/" +
-                                encodeURIComponent(remoteFilename) + ".txt");
+                                encodeURIComponent(remoteFilename) + ".byofs");
                             xhr.onreadystatechange = function(){
                                 if(xhr.readyState === 4){
                                     if(xhr.status === 200){
@@ -328,7 +327,7 @@
                                 }
                             };
                             xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
-                            xhr.send(data.buffer);
+                            xhr.send(data);
                         })
 
                         //make the file public if requested
@@ -337,14 +336,15 @@
                                 return new Promise(function(resolve, reject){
                                     var xhr = new XMLHttpRequest();
                                     xhr.open("POST", "https://api.dropbox.com/1/shares/sandbox/" +
-                                        encodeURIComponent(remoteFilename) + ".txt?short_url=false");
+                                        encodeURIComponent(remoteFilename) + ".byofs?short_url=false");
                                     xhr.onreadystatechange = function(){
                                         if(xhr.readyState === 4){
                                             if(xhr.status === 200){
                                                 var url = JSON.parse(xhr.responseText)['url'];
+                                                url = url.replace("www.dropbox.com", "dl.dropboxusercontent.com");
                                                 resolve({
                                                     "status": 200,
-                                                    "response": url,
+                                                    "responseText": url,
                                                     "xhr": xhr,
                                                 });
                                             }
@@ -421,7 +421,7 @@
                 //handle the encrypted file retrieval
                 .then(function(xhr){
                     if(xhr.status === 200){
-                        return xhr.response;
+                        return xhr.responseText;
                     }
                     else{
                         var err = Error();
@@ -435,7 +435,7 @@
 
                     //skip decrypting if a public file
                     if(meta.pub === true && settings.allowPublic){
-                        return bytes2str(downloaded);
+                        return bytes2str(downloaded, meta.encoding);
                     }
 
                     //convert string to Uint16Array
@@ -465,7 +465,7 @@
                         "tagLength": 128,
                     }, settings.key, encrypted)
                     .then(function(decrypted){
-                        return bytes2str(decrypted);
+                        return bytes2str(decrypted, meta.encoding);
                     });
                 })
 
@@ -497,26 +497,36 @@
             //generic write function
             "write": function(meta, data, callback){
 
-                //derive a key if it hasn't been derived yet
+                //parse write permissions and options
                 new Promise(function(resolve, reject){
-                    if(settings.key === undefined){
-                        resolve(pbkdf2(settings.secret, settings.app));
+
+                    //accept string filenames as file metadata
+                    if(typeof(meta) === "string"){
+                        meta = {"name": meta}
+                    }
+
+                    //if the file is public, make sure that's allowed
+                    if(data !== null && meta.pub === true && !settings.allowPublic){
+                        throw Error("This filesystem was created to not allow public files.");
                     }
                     else{
-                        resolve(settings.key);
+                        resolve();
+                    }
+                })
+
+                //derive a key if it hasn't been derived yet
+                .then(function(){
+                    if(settings.key === undefined){
+                        return pbkdf2(settings.secret, settings.app);
+                    }
+                    else{
+                        return settings.key;
                     }
                 })
 
                 //set the derived key in the settings
                 .then(function(key){
                     settings.key = key;
-                })
-
-                //accept string filenames as file metadata
-                .then(function(){
-                    if(typeof(meta) === "string"){
-                        meta = {"name": meta}
-                    }
                 })
 
                 //hash the filename for the stored location
@@ -544,7 +554,7 @@
                     else if(meta.pub === true && settings.allowPublic){
                         return {
                             "remoteFilename": remoteFilename,
-                            "upload": str2bytes(data),
+                            "upload": str2bytes(data, meta.encoding),
                         };
                     }
 
@@ -558,7 +568,7 @@
                         "iv": iv,
                         "additionalData": aad,
                         "tagLength": 128,
-                    }, settings.key, str2bytes(data))
+                    }, settings.key, str2bytes(data, meta.encoding))
                     .then(function(buf){
                         //concat the version, iv, aad, and ciphertext into one file
                         //
@@ -577,7 +587,7 @@
 
                         return {
                             "remoteFilename": remoteFilename,
-                            "upload": bytes,
+                            "upload": bytes.buffer,
                         };
                     });
                 })

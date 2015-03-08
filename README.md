@@ -35,12 +35,17 @@ This library's API is purposefully minimal to keep the code clean and easy to au
       var fs = byoFS({
         app: "myapp",
         remote: "dropbox",
+        allowPublic: true,
         secret: "mypassword",
-        code: "<dropbox_auth_code>",
-      });
+        code: "<dropbox_auth_code>", //The code that is returned when user visits:
+      });                            //https://www.dropbox.com/1/oauth2/authorize
+                                     //?response_type=code&client_id=wy1ojs3oijr3gpt
 
       //when a datastore is connected, write "Hello World!" to the private "myfile"
       fs.write("myfile", "Hello World!", function(pxhr){
+
+        //200 status for a successful encrypted write
+        console.log(pxhr.status, pxhr.responseText);
 
         //when the file is written, read the contents back
         fs.read("myfile", function(pxhr){
@@ -57,26 +62,30 @@ This library's API is purposefully minimal to keep the code clean and easy to au
               //non-existent files return a 404 status
               console.log(pxhr.status);
 
+              //write a public file (NOT ENCRYPTED!)
+              fs.write({
+                name: "mypubfile",
+                pub: true,
+                encoding: "utf-8",
+              }, "Hello Public!", function(pxhr){
+
+                //anyone can now retrieve the file
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", pxhr.responseText);
+                xhr.onreadystatechange = function(){
+                  if(xhr.readyState === 4 && xhr.status === 200){
+                    console.log(xhr.responseText); //"Hello Public!"
+                  }
+                };
+                xhr.send();
+
+              });
+
             });
 
           });
 
         });
-
-      });
-
-      //write a public file (NOT ENCRYPTED!)
-      fs.write({name: "mypubfile", pub: true}, "Hello Public!", function(pxhr){
-
-        //anyone can now retrieve the file
-        var xhr = new XMLHttpRequest();
-        xhr.open("GET", pxhr.responseText);
-        xhr.onreadystatechange = function(){
-          if(xhr.readyState === 4 && xhr.status === 200){
-            console.log(xhr.responseText); //"Hello Public!"
-          }
-        };
-        xhr.send();
 
       });
 
@@ -100,37 +109,53 @@ Returns undefined. Inserts the default byoFS login widget. Use this if you don't
 
 Returns a new fs object. Use this if you have made your own widget to get the secret and code.
 
-`config` is the object that has all the initialization settings for byoFS.
+`config` - object - The object that has all the initialization settings for byoFS.
 
-`config.app` is a string that will be prefixed to all files written to the filesystem (default is "byoFS").
+`config.app` - string - Optional. A string that will be prefixed to all files written to the filesystem. Default is "byoFS".
 
-`config.remote` is where you want the user to store their files (can be "localStorage" or "dropbox").
+`config.remote` - string - Required. Where you want the user to store their files (required). Options are "localStorage" and "dropbox".
 
-`config.secret` is the passphrase that will be used to encrypt files.
+`config.allowPublic` - boolean - Optional. Whether the filesystem an write unencrypted public files. Default is false.
 
-`config.code` is the authorization code used to get a dropbox access_token.
+`config.secret` - string - Required. The passphrase that will be used to encrypt files.
 
-`config.allowPublic` is whether the filesystem an write unencrypted public files (default false).
+`config.token` - string - Optional. If you already have a Dropbox access_token, you can include it so byoFS doesn't have to convert the `config.code` to an access_token. Default is undefined.
+
+`config.code` - string - Optional. The authorization code used to get a dropbox access_token. Required if `config.token` is not supplied. Default is undefined. Use [this link](https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=wy1ojs3oijr3gpt) to ask the user to get a code from Dropbox.
 
 ### fs
 
 `fs` is a filesystem object that has `read()` and `write()` functions.
 
-### fs.read(*filename, callback*)
+### fs.read(*filename or file_conf, callback*)
 
 `fs.read()` is the function that retrieves data from the filesystem based on filename.
 
-`filename` is a string that is the location of the file.
+`filename` - string - The name of the file. The filesystem is flat, so there are no folders.
 
-`callback` is a function that is called when the file is retrieved. A pseudo-XMLHttpRequest‎ object `xhr` is passed as the first argument to the callback function.
+`file_conf` - object - An object with the file's settings. You can use this in place of the `filename` if you want to change any of the default parameters.
+
+`file_conf.name` - string - Required. The name of the file.
+
+`file_conf.pub` - boolean - Optional. Whether the file is public and unencrypted. Default is false.
+
+`file_conf.encoding` - string - Optional. The encoding you set when the file was written. Default is "utf-16".
+
+`callback` - function - A function that is called when the file is retrieved. A pseudo-XMLHttpRequest‎ object `pxhr` is passed as the first argument to the callback function.
 
 ### fs.write(*filename or file_conf, data, callback*)
 
 `fs.write()` is the function that writes data to the filesystem based on filename.
 
-`filename` is a string that is the location of the file.
+`filename` - string - The name of the file. The filesystem is flat, so there are no folders.
 
-`file_conf` is an object with "name" and "pub" keys that contain the filename and public/private setting, respectivly. `{name: <filename>, pub: true/false}`
+`file_conf` - object - An object with the file's settings. You can use this in place of the `filename` if you want to change any of the default parameters.
+
+`file_conf.name` - string - Required. The name of the file.
+
+`file_conf.pub` - boolean - Optional. Whether the file should be saved as public and unencrypted. Only possible when allowPublic is set to true. Default is false.
+
+`file_conf.encoding` - string - Optional. If a public file, this is the string encoding for the public data. Options are "utf-16" (default) and "utf-8". This is helpful if you plan to download the public file from another client that doesn't use utf-16 as the base string encoding (which is what javascript uses).
 
 `data` is a string that is the contents of the file. NOTE: only strings are currently accepted, so you will need to encode any other filetypes to a string.
 
