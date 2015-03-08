@@ -30,6 +30,48 @@ This library's API is purposefully minimal to keep the code clean and easy to au
 ## How to Use
 
     <script src="byoFS.min.js"></script>
+
+    <!-- localStorage Example -->
+    <script>
+      //setup the filesystem
+      var fs = byoFS({
+        app: "myapp",
+        remote: "localStorage",
+        secret: "mypassword",
+      });
+
+      //when a datastore is connected, write "Hello World!" to the private "myfile"
+      fs.write("myfile", "Hello World!", function(pxhr){
+
+        //200 status for a successful encrypted write
+        console.log(pxhr.status, pxhr.responseText);
+
+        //when the file is written, read the contents back
+        fs.read("myfile", function(pxhr){
+
+          //when the contents are returned, print in the console ("Hello World!")
+          console.log(pxhr.responseText);
+
+          //delete the file
+          fs.write("myfile", null, function(pxhr){
+
+            //check to see if the file is deleted
+            fs.read("myfile", function(pxhr){
+
+              //non-existent files return a 404 status
+              console.log(pxhr.status);
+
+            });
+
+          });
+
+        });
+
+      });
+
+    </script>
+
+    <!-- Dropbox Example -->
     <script>
       //setup the filesystem
       var fs = byoFS({
@@ -37,9 +79,76 @@ This library's API is purposefully minimal to keep the code clean and easy to au
         remote: "dropbox",
         allowPublic: true,
         secret: "mypassword",
-        code: "<dropbox_auth_code>", //The code that is returned when user visits:
-      });                            //https://www.dropbox.com/1/oauth2/authorize
-                                     //?response_type=code&client_id=wy1ojs3oijr3gpt
+        //The code that is returned when user visits:
+        //https://www.dropbox.com/1/oauth2/authorize?response_type=code
+        //&client_id=wy1ojs3oijr3gpt
+        code: "<dropbox_auth_code>",
+      });
+
+      //when a datastore is connected, write "Hello World!" to the private "myfile"
+      fs.write("myfile", "Hello World!", function(pxhr){
+
+        //200 status for a successful encrypted write
+        console.log(pxhr.status, pxhr.responseText);
+
+        //when the file is written, read the contents back
+        fs.read("myfile", function(pxhr){
+
+          //when the contents are returned, print in the console ("Hello World!")
+          console.log(pxhr.responseText);
+
+          //delete the file
+          fs.write("myfile", null, function(pxhr){
+
+            //check to see if the file is deleted
+            fs.read("myfile", function(pxhr){
+
+              //non-existent files return a 404 status
+              console.log(pxhr.status);
+
+              //write a public file (NOT ENCRYPTED!)
+              fs.write({
+                name: "mypubfile",
+                pub: true,
+                encoding: "utf-8",
+              }, "Hello Public!", function(pxhr){
+
+                //anyone can now retrieve the file
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", pxhr.responseText);
+                xhr.onreadystatechange = function(){
+                  if(xhr.readyState === 4 && xhr.status === 200){
+                    console.log(xhr.responseText); //"Hello Public!"
+                  }
+                };
+                xhr.send();
+
+              });
+
+            });
+
+          });
+
+        });
+
+      });
+
+    </script>
+
+    <!-- Google Drive Example -->
+    <script>
+      //setup the filesystem
+      var fs = byoFS({
+        app: "myapp",
+        remote: "googledrive",
+        allowPublic: true,
+        secret: "mypassword",
+        //The access_token that is returned when user visits:
+        //https://accounts.google.com/o/oauth2/auth?response_type=token
+        //&client_id=176411387630-0vfm0pqm4v5lj6vppavvoqrl7j4q0dsa.apps.googleusercontent.com
+        //&redirect_uri=http://localhost/&scope=https://www.googleapis.com/auth/drive.file
+        token: "<googledrive_access_token>",
+      });
 
       //when a datastore is connected, write "Hello World!" to the private "myfile"
       fs.write("myfile", "Hello World!", function(pxhr){
@@ -113,15 +222,15 @@ Returns a new fs object. Use this if you have made your own widget to get the se
 
 `config.app` - string - Optional. A string that will be prefixed to all files written to the filesystem. Default is "byoFS".
 
-`config.remote` - string - Required. Where you want the user to store their files (required). Options are "localStorage" and "dropbox".
+`config.remote` - string - Required. Where you want the user to store their files (required). Options are "localStorage", "dropbox", and "googledrive".
 
 `config.allowPublic` - boolean - Optional. Whether the filesystem an write unencrypted public files. Default is false.
 
 `config.secret` - string - Required. The passphrase that will be used to encrypt files.
 
-`config.token` - string - Optional. If you already have a Dropbox access_token, you can include it so byoFS doesn't have to convert the `config.code` to an access_token. Default is undefined.
+`config.token` - string - Optional. If you already have a Dropbox or Google Drive access_token, you can include it so byoFS doesn't have to convert the `config.code` to an access_token. Default is undefined.
 
-`config.code` - string - Optional. The authorization code used to get a dropbox access_token. Required if `config.token` is not supplied. Default is undefined. Use [this link](https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=wy1ojs3oijr3gpt) to ask the user to get a code from Dropbox.
+`config.code` - string - Optional. The authorization code used to get a dropbox access_token. Required if `config.token` is not supplied. Default is undefined. Use [this link](https://www.dropbox.com/1/oauth2/authorize?response_type=code&client_id=wy1ojs3oijr3gpt) to ask the user to get a code from Dropbox. Google Drive doesn't have a response_type=code option :(.
 
 ### fs
 
@@ -171,9 +280,9 @@ Returns a new fs object. Use this if you have made your own widget to get the se
 
 ## User Storage Options
 
+* [localStorage](https://example.com/) (working)
 * [Dropbox](https://www.dropbox.com) (working)
-* [localStorage](https://example.com/) (working, mainly used for testing, not recommended for production)
-* [Google Drive](https://drive.google.com/) (future)
+* [Google Drive](https://drive.google.com/) (working)
 * [remoteStorage](http://remotestorage.io/) (future)
 * [Box.com](https://box.com/) (future)
 * [SpiderOak](https://spideroak.com/) (future)

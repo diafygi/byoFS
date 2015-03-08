@@ -105,14 +105,14 @@
         //default settings
         var defaults = {
             "app": "byoFS",           //app namespace
-            "remote": "localStorage", //(localStorage|dropbox)
+            "remote": "localStorage", //(localStorage|dropbox|googldrive)
             "allowPublic": false,     //whether files can be made public or not
 
             //These don't have defaults
             //"secret": "...", //required, the passphrase used for PBKDF2
-            //"code": "...",   //optional, for dropbox (OAuth code from their dialog)
+            //"code": "...",   //optional, OAuth code from Dropbox
+            //"token": "...",   //optional, access_token from Dropbox or Google Drive
         };
-        var remotes = {}
 
         //use default settings if not set
         settings = settings || {};
@@ -122,21 +122,16 @@
             }
         }
 
-        //only support localStorage and Dropbox as remotes
-        if(["dropbox", "localStorage"].indexOf(settings.remote) === -1){
-            throw Error("The only valid remotes are localStorage and dropbox.");
-        }
+        //urlencode the app name so it can be used in query strings
+        settings.app = encodeURIComponent(settings.app);
 
-        //raise error if trying to allow public access for local storage
-        if(settings.remote === "localStorage" && settings.allowPublic){
-            throw Error("localStorage is local and can't save public files.");
-        }
 
-        //raise error if no code in Dropbox
-        if(["dropbox"].indexOf(settings.remote) !== -1
-          && settings.code === undefined && settings.token === undefined){
-            throw Error(settings.remote + " requires a 'code' or 'token' field.");
-        }
+        /*************************************
+         *************************************
+         *** ======= Begin Remotes ======= ***
+         *************************************
+         *************************************/
+        var remotes = {};
 
         /********************
          ********************
@@ -145,6 +140,8 @@
          ********************/
 
         remotes.localStorage = {
+            //can't save public files
+            "allowPublic": false,
 
             //read a file from localStorage
             "read": function(remoteFilename){
@@ -240,6 +237,8 @@
         }
 
         remotes.dropbox = {
+            //can save public files
+            "allowPublic": true,
 
             //read a file from Dropbox
             "read": function(remoteFilename){
@@ -273,7 +272,7 @@
                         xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
                         xhr.send();
                     });
-                })
+                });
             },
 
             //write a file to Dropbox
@@ -317,7 +316,11 @@
                             xhr.onreadystatechange = function(){
                                 if(xhr.readyState === 4){
                                     if(xhr.status === 200){
-                                        resolve(xhr);
+                                        resolve({
+                                            "status": 200,
+                                            "responseText": "File successfully written.",
+                                            "dropbox": xhr,
+                                        });
                                     }
                                     else{
                                         var err = Error();
@@ -366,6 +369,405 @@
                     }
                 });
             },
+        }
+
+
+        /********************
+         ********************
+         *** Google Drive ***
+         ********************
+         ********************/
+
+        var googldrive_client_id = "176411387630-0vfm0pqm4v5lj6vppavvoqrl7j4q0dsa.apps.googleusercontent.com";
+        var googldrive_api_key = "AIzaSyBYii2Uc-4mEUvyRU2w7OrS6DBSpsawXcc";
+
+        //verify the access_token and get or create the app folder
+        function _googledrive_auth(){
+            return new Promise(function(resolve, reject){
+
+                //verify the access_token
+                if(settings.verified === undefined){
+                    var xhr = new XMLHttpRequest();
+                    xhr.open("GET", "https://www.googleapis.com/oauth2/v1/tokeninfo" +
+                      "?access_token=" + encodeURIComponent(settings.token));
+                    xhr.onreadystatechange = function(){
+                        if(xhr.readyState === 4){
+                            if(xhr.status === 200){
+                                //verify that the access_token is for this client_id
+                                var audience = JSON.parse(xhr.responseText)['audience'];
+                                if(googldrive_client_id === audience){
+                                    settings.verified = true;
+                                    resolve();
+                                }
+                                //access_token isn't for this client_id
+                                else{
+                                    var err = Error("Audience doesn't match client_id.");
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                            else{
+                                var err = Error();
+                                err.xhr = xhr;
+                                reject(err);
+                            }
+                        }
+                    };
+                    xhr.send();
+                }
+
+                //access_token is already verified
+                else{
+                    resolve();
+                }
+            })
+
+            //get the app folder id
+            .then(function(){
+
+                //folderId already has been found
+                if(settings.folderId !== undefined){
+                    return settings.folderId;
+                }
+
+                //lookup the folder
+                else{
+                    return new Promise(function(resolve, reject){
+                        var xhr = new XMLHttpRequest();
+                        xhr.open("GET",
+                            "https://www.googleapis.com/drive/v2/files" +
+                            "?q=" + encodeURIComponent(
+                            "mimeType = \"application/vnd.google-apps.folder\" and " +
+                            "title = \"" + settings.app + "\"")
+                        );
+                        xhr.onreadystatechange = function(){
+                            if(xhr.readyState === 4){
+                                if(xhr.status === 200){
+                                    var folders = JSON.parse(xhr.responseText)['items'];
+                                    //found the folder
+                                    if(folders.length === 1){
+                                        resolve(folders[0]['id']);
+                                    }
+                                    //didn't find the folder
+                                    else{
+                                        resolve(undefined);
+                                    }
+                                }
+                                else{
+                                    var err = Error();
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                        };
+                        xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                        xhr.send();
+                    });
+                }
+            })
+
+            //set the folder id
+            .then(function(folderId){
+
+                //folder id was found, so set it
+                if(folderId !== undefined){
+                    settings.folderId = folderId;
+                    return;
+                }
+
+                //create the app folder since it doesn't exist yet
+                else{
+                    return new Promise(function(resolve, reject){
+                        var xhr = new XMLHttpRequest();
+                        xhr.open("POST", "https://www.googleapis.com/drive/v2/files");
+                        xhr.onreadystatechange = function(){
+                            if(xhr.readyState === 4){
+                                if(xhr.status === 200){
+                                    //set the new folder id
+                                    settings.folderId = JSON.parse(xhr.responseText)['id']
+                                    resolve(settings.folderId);
+                                }
+                                else{
+                                    var err = Error();
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                        };
+                        xhr.setRequestHeader("Content-Type", "application/json");
+                        xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                        xhr.send(JSON.stringify({
+                            "title": settings.app,
+                            "mimeType": "application/vnd.google-apps.folder",
+                        }));
+                    });
+                }
+            });
+        }
+
+        remotes.googledrive = {
+            //can save public files
+            "allowPublic": true,
+
+            //read a file from Google Drive
+            "read": function(remoteFilename){
+
+                //verify the auth token if haven't done so yet
+                return _googledrive_auth()
+
+                //request the file
+                .then(function(){
+                    return new Promise(function(resolve, reject){
+                        var xhr = new XMLHttpRequest();
+                        xhr.open("GET",
+                            "https://www.googleapis.com/drive/v2/files" +
+                            "?fields=items(description,id)&q=" + encodeURIComponent(
+                            "\"" + settings.folderId + "\" in parents and " +
+                            "title = \"" + remoteFilename + "\"")
+                        );
+                        xhr.onreadystatechange = function(){
+                            if(xhr.readyState === 4){
+                                if(xhr.status === 200){
+                                    var file_json = JSON.parse(xhr.responseText);
+
+                                    //found the file
+                                    if(file_json['items'].length === 1){
+
+                                        //get the file contents from the description
+                                        var file_data = file_json['items'][0]['description'];
+
+                                        //convert utf-8 contents to arraybuffer
+                                        var file_buf = str2bytes(file_data, "utf-8");
+                                        resolve({
+                                            "status": 200,
+                                            "responseText": file_buf,
+                                            "googledrive": xhr,
+                                        });
+                                    }
+
+                                    //didn't find the file
+                                    else{
+                                        var err = Error();
+                                        err['xhr'] = {
+                                            "status": 404,
+                                            "responseText": "File name not found.",
+                                            "googledrive": xhr,
+                                        };
+                                        reject(err);
+                                    }
+                                }
+                                else{
+                                    var err = Error();
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                        };
+                        xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                        xhr.send();
+                    });
+                });
+            },
+
+            //write a file to Google Drive
+            "write": function(remoteFilename, data, isPublic){
+
+                //verify the auth token if haven't done so yet
+                return _googledrive_auth()
+
+                //lookup the file
+                .then(function(){
+                    return new Promise(function(resolve, reject){
+                        var xhr = new XMLHttpRequest();
+                        xhr.open("GET",
+                            "https://www.googleapis.com/drive/v2/files" +
+                            "?fields=items/id&q=" + encodeURIComponent(
+                            "\"" + settings.folderId + "\" in parents and " +
+                            "title = \"" + remoteFilename + "\"")
+                        );
+                        xhr.onreadystatechange = function(){
+                            if(xhr.readyState === 4){
+                                if(xhr.status === 200){
+                                    var file_json = JSON.parse(xhr.responseText);
+
+                                    //found the file id
+                                    if(file_json['items'].length === 1){
+                                        resolve(file_json['items'][0]['id']);
+                                    }
+
+                                    //didn't find the file
+                                    else{
+                                        resolve(undefined);
+                                    }
+                                }
+                                else{
+                                    var err = Error();
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                        };
+                        xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                        xhr.send();
+                    });
+                })
+
+                //write or delete the file
+                .then(function(fileId){
+
+                    //delete the file
+                    if(data === null && fileId !== undefined){
+                        return new Promise(function(resolve, reject){
+                            var xhr = new XMLHttpRequest();
+                            xhr.open("DELETE", "https://www.googleapis.com/drive/v2/files/" + fileId);
+                            xhr.responseType = "arraybuffer"; //prevents parsing as html
+                            xhr.onreadystatechange = function(){
+                                if(xhr.readyState === 4){
+                                    if(xhr.status === 204){
+                                        resolve({
+                                            "status": 200, //override 204
+                                            "responseText": "File successfully deleted.",
+                                            "googledrive": xhr,
+                                        });
+                                    }
+                                    else{
+                                        var err = Error();
+                                        err.xhr = xhr;
+                                        reject(err);
+                                    }
+                                }
+                            };
+                            xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                            xhr.send();
+                        });
+                    }
+
+                    //skip deleting a nonexistent file
+                    else if(data === null && fileId === undefined){
+                        return {
+                            "status": 200,
+                            "responseText": "Successfully deleted nonexistent file",
+                        };
+                    }
+
+                    //overwrite the file
+                    else if(fileId !== undefined){
+                        var method = "PUT";
+                        var endpoint = "https://www.googleapis.com/drive/v2/files/" + fileId;
+                    }
+                    //save a new file
+                    else{
+                        var method = "POST";
+                        var endpoint = "https://www.googleapis.com/drive/v2/files";
+                    }
+                    return new Promise(function(resolve, reject){
+                        var xhr = new XMLHttpRequest();
+                        xhr.open(method, endpoint);
+                        xhr.onreadystatechange = function(){
+                            if(xhr.readyState === 4){
+                                if(xhr.status === 200){
+                                    resolve({
+                                        "status": 200,
+                                        "responseText": "File successfully written.",
+                                        "googledrive": xhr,
+                                    });
+                                }
+                                else{
+                                    var err = Error();
+                                    err.xhr = xhr;
+                                    reject(err);
+                                }
+                            }
+                        };
+                        xhr.setRequestHeader("Content-Type", "application/json");
+                        xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                        xhr.send(JSON.stringify({
+                            "title": remoteFilename,
+                            //NOTE: Writing the encrypted file to the description
+                            //because the actual document is not CORS accessible
+                            //https://code.google.com/a/google.com/p/apps-api-issues/issues/detail?id=3734
+                            "description": bytes2str(data, "utf-8"),
+                            "parents": [{
+                                "id": settings.folderId,
+                            }],
+                        }));
+                    })
+
+                    //make the file public if requested
+                    .then(function(response){
+                        if(isPublic && settings.allowPublic){
+                            var fileId = JSON.parse(response.googledrive.responseText)['id'];
+                            var fileUrl = "https://www.googleapis.com/drive/v2/files/" + fileId;
+                            return new Promise(function(resolve, reject){
+                                var xhr = new XMLHttpRequest();
+                                xhr.open("POST", fileUrl + "/permissions")
+                                xhr.onreadystatechange = function(){
+                                    if(xhr.readyState === 4){
+                                        if(xhr.status === 200){
+                                            var pubUrl = fileUrl +
+                                                "?fields=description" +
+                                                "&key=" + googldrive_api_key;
+                                            resolve({
+                                                "status": 200,
+                                                "responseText": pubUrl,
+                                                "xhr": xhr,
+                                            });
+                                        }
+                                        else{
+                                            var err = Error();
+                                            err.xhr = xhr;
+                                            reject(err);
+                                        }
+                                    }
+                                };
+                                xhr.setRequestHeader("Content-Type", "application/json");
+                                xhr.setRequestHeader("Authorization", "Bearer " + settings.token);
+                                xhr.send(JSON.stringify({
+                                    "type": "anyone",
+                                    "role": "reader",
+                                    "withLink": true,
+                                }));
+                            });
+                        }
+                        else{
+                            return response;
+                        }
+                    });
+                });
+            },
+        }
+
+        /***************************************
+         ***************************************
+         *** (insert new remotes above here) ***
+         *** ========= End Remotes ========= ***
+         ***************************************
+         ***************************************/
+
+        /*****************************
+         *****************************
+         *** Initialization Checks ***
+         *****************************
+         *****************************/
+
+        //only support localStorage and Dropbox as remotes
+        if(remotes[settings.remote] === undefined){
+            throw Error("That doesn't appear to be a valid remote.");
+        }
+
+        //raise error if trying to allow public access for local storage
+        if(settings.allowPublic && !remotes[settings.remote].allowPublic){
+            throw Error(settings.remote + " can't save public files.");
+        }
+
+        //raise error if no code or token for Dropbox
+        if(settings.remote === "dropbox" && settings.code === undefined && settings.token === undefined){
+            throw Error(settings.remote + " requires a 'code' or 'token' field.");
+        }
+
+        //raise error if token for Google Drive
+        if(settings.remote === "googledrive" && settings.token === undefined){
+            throw Error(settings.remote + " requires a 'token' field.");
         }
 
         /*********************************
@@ -480,7 +882,7 @@
                 //handle any errors
                 .catch(function(err){
                     //return the xhr error
-                    if(err.xhr !== undefined){
+                    if(err.xhr !== undefined && err.message === ""){
                         callback(err.xhr);
                     }
                     //handle generic exceptions
